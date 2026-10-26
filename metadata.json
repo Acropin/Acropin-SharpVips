@@ -1,0 +1,6 @@
+{
+  "name": "Acropin Food Image Library & Menu Processing",
+  "description": "Centralized food image library, Sharp image processing engine, canonical dish matching, and offline-capable restaurant menu system.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

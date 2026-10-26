@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Acropin Food Image Library & Menu Processing</title>
+    <meta name="description" content="Centralized food image library, Sharp image processing engine, canonical dish matching, and offline-capable restaurant menu system." />
+    <meta property="og:title" content="Acropin Food Image Library & Menu Processing" />
+    <meta property="og:description" content="Centralized food image library, Sharp image processing engine, canonical dish matching, and offline-capable restaurant menu system." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="manifest" href="/manifest.json" />
+  </head>
+    <script>
+      // Automatically unregister any legacy service workers and clear stale caches
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for (var reg of registrations) {
+            reg.unregister();
+          }
+        });
+      }
+      if ('caches' in window) {
+        caches.keys().then(function(names) {
+          for (var name of names) {
+            caches.delete(name);
+          }
+        });
+      }
+    </script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

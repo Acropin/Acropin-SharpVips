@@ -1,0 +1,706 @@
+[
+  {
+    "id": "asset_1793011090260_guubo",
+    "dishName": "Margherita Pizza",
+    "storageKey": "food-assets/asset_1793011090260_guubo/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_1793011090260_guubo/v1/480.webp",
+    "sha256Hash": "0ec3c624d9f2b6b1bacbed2550723667f8a2f047bc9a805c248e5c0401997d53",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 38610,
+    "sourceUrl": "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=1000&auto=format&fit=crop&q=80",
+    "sourceProvider": "images.unsplash.com",
+    "licenseType": "CC0",
+    "licenseEvidence": "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=1000&auto=format&fit=crop&q=80",
+    "requiredAttribution": "Source: images.unsplash.com",
+    "processingVersion": "v1",
+    "processingQuality": 72,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-26T10:38:10.261Z",
+    "updatedAt": "2026-10-26T10:38:10.261Z",
+    "tags": [
+      "margherita pizza"
+    ]
+  },
+  {
+    "id": "asset_1793011074873_8re2m",
+    "dishName": "Malai Soya Chaap",
+    "storageKey": "food-assets/asset_1793011074873_8re2m/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_1793011074873_8re2m/v1/480.webp",
+    "sha256Hash": "1c1870e140706eae2a1c81f083f0f74b253c4abf79a2d1377227fc335ab35947",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 28312,
+    "sourceProvider": "Restaurant Upload",
+    "licenseType": "Custom-Commercial",
+    "licenseEvidence": "Owner upload consent",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-26T10:37:54.874Z",
+    "updatedAt": "2026-10-26T10:37:54.874Z",
+    "tags": [
+      "malai soya chaap"
+    ]
+  },
+  {
+    "id": "asset_1793010932642_mswfq",
+    "dishName": "Test Pizza",
+    "storageKey": "food-assets/asset_1793010932642_mswfq/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_1793010932642_mswfq/v1/480.webp",
+    "sha256Hash": "e3e650f8fcec90c5fc77bf0a3bdae52a68752755d785bcdbd6b2eccc88f09e7a",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 494,
+    "sourceProvider": "Restaurant Upload",
+    "licenseType": "Custom-Commercial",
+    "licenseEvidence": "Owner upload consent",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "pending_review",
+    "createdAt": "2026-10-26T10:35:32.645Z",
+    "updatedAt": "2026-10-26T10:35:32.645Z",
+    "tags": [
+      "test pizza"
+    ]
+  },
+  {
+    "id": "asset_1793010919310_87b1x",
+    "dishName": "Margherita Pizza",
+    "storageKey": "food-assets/asset_1793010919310_87b1x/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_1793010919310_87b1x/v1/480.webp",
+    "sha256Hash": "ed37bdd6541db99c0168851264698464d8584d85219b490a314cf525f80c07c3",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 39472,
+    "sourceUrl": "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=1000&auto=format&fit=crop&q=80",
+    "sourceProvider": "images.unsplash.com",
+    "licenseType": "CC0",
+    "licenseEvidence": "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=1000&auto=format&fit=crop&q=80",
+    "requiredAttribution": "Source: images.unsplash.com",
+    "processingVersion": "v1",
+    "processingQuality": 72,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-26T10:35:19.311Z",
+    "updatedAt": "2026-10-26T10:35:19.311Z",
+    "tags": [
+      "margherita pizza"
+    ]
+  },
+  {
+    "id": "asset_1793010288752_75ivi",
+    "dishName": "Classic Cheeseburger",
+    "storageKey": "food-assets/asset_1793010288752_75ivi/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_1793010288752_75ivi/v1/480.webp",
+    "sha256Hash": "fb6da32aa5bf355503c7ac063cb34c443b527dbad03aa9459ae012d1c00d1e6f",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 23586,
+    "sourceUrl": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=1000&auto=format&fit=crop&q=80",
+    "sourceProvider": "images.unsplash.com",
+    "licenseType": "CC0",
+    "licenseEvidence": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=1000&auto=format&fit=crop&q=80",
+    "requiredAttribution": "Source: images.unsplash.com",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-26T10:24:48.754Z",
+    "updatedAt": "2026-10-26T10:24:48.754Z",
+    "tags": [
+      "classic cheeseburger"
+    ]
+  },
+  {
+    "id": "asset_1793010258811_4vxyh",
+    "dishName": "Margherita Pizza",
+    "storageKey": "food-assets/asset_1793010258811_4vxyh/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_1793010258811_4vxyh/v1/480.webp",
+    "sha256Hash": "ed37bdd6541db99c0168851264698464d8584d85219b490a314cf525f80c07c3",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 39472,
+    "sourceUrl": "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=1000&auto=format&fit=crop&q=80",
+    "sourceProvider": "images.unsplash.com",
+    "licenseType": "CC0",
+    "licenseEvidence": "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=1000&auto=format&fit=crop&q=80",
+    "requiredAttribution": "Source: images.unsplash.com",
+    "processingVersion": "v1",
+    "processingQuality": 72,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-26T10:24:18.812Z",
+    "updatedAt": "2026-10-26T10:24:18.812Z",
+    "tags": [
+      "margherita pizza"
+    ]
+  },
+  {
+    "id": "asset_paneer_butter_masala_1",
+    "canonicalDishId": "dish_paneer_butter_masala",
+    "dishName": "Paneer Butter Masala",
+    "storageKey": "food-assets/asset_paneer_butter_masala_1/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_paneer_butter_masala_1/v1/480.webp",
+    "sha256Hash": "6897cce5848bdace5b865719431b605b71dd882a35d5b7b441a2e87f8860bcfa",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 7634,
+    "sourceProvider": "Acropin Studio",
+    "licenseType": "Studio-Acropin-Proprietary",
+    "licenseEvidence": "acropin://licensing/assets/paneer_butter_masala_v1",
+    "requiredAttribution": "Acropin Culinary Studio (Commercial Exclusive)",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-26T10:09:11.689Z",
+    "updatedAt": "2026-10-26T10:09:11.689Z",
+    "tags": [
+      "north indian",
+      "veg",
+      "seed-catalog"
+    ]
+  },
+  {
+    "id": "asset_butter_chicken_1",
+    "canonicalDishId": "dish_butter_chicken",
+    "dishName": "Butter Chicken",
+    "storageKey": "food-assets/asset_butter_chicken_1/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_butter_chicken_1/v1/480.webp",
+    "sha256Hash": "7e2ffe5e0a57458210e45f818e56a26e7945dac7663e770fd271de8b62621e40",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 7366,
+    "sourceProvider": "Acropin Studio",
+    "licenseType": "CC-BY-4.0",
+    "licenseEvidence": "https://creativecommons.org/licenses/by/4.0/",
+    "requiredAttribution": "Photo by Chef Marcus (CC-BY-4.0)",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-26T10:09:11.939Z",
+    "updatedAt": "2026-10-26T10:09:11.939Z",
+    "tags": [
+      "north indian",
+      "non-veg",
+      "seed-catalog"
+    ]
+  },
+  {
+    "id": "asset_dal_makhani_1",
+    "canonicalDishId": "dish_dal_makhani",
+    "dishName": "Dal Makhani",
+    "storageKey": "food-assets/asset_dal_makhani_1/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_dal_makhani_1/v1/480.webp",
+    "sha256Hash": "8f9c7632a710e308442c969395ed05c2c897330f16f4ed6aa35e141892ccde31",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 7234,
+    "sourceProvider": "Acropin Studio",
+    "licenseType": "CC0",
+    "licenseEvidence": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "requiredAttribution": "Acropin Open Food Media",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-26T10:09:12.190Z",
+    "updatedAt": "2026-10-26T10:09:12.190Z",
+    "tags": [
+      "north indian",
+      "veg",
+      "seed-catalog"
+    ]
+  },
+  {
+    "id": "asset_chicken_biryani_1",
+    "canonicalDishId": "dish_chicken_biryani",
+    "dishName": "Chicken Biryani",
+    "storageKey": "food-assets/asset_chicken_biryani_1/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_chicken_biryani_1/v1/480.webp",
+    "sha256Hash": "b0ca7c86e31afec2fc022267f6f2dc672884e6d7f679aa18ac394723cc3b12cb",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 7316,
+    "sourceProvider": "Acropin Studio",
+    "licenseType": "Unsplash-Commercial",
+    "licenseEvidence": "https://unsplash.com/license",
+    "requiredAttribution": "Unsplash Commercial Food Project",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-26T10:09:12.427Z",
+    "updatedAt": "2026-10-26T10:09:12.427Z",
+    "tags": [
+      "indian",
+      "non-veg",
+      "seed-catalog"
+    ]
+  },
+  {
+    "id": "asset_veg_biryani_1",
+    "canonicalDishId": "dish_veg_biryani",
+    "dishName": "Vegetable Biryani",
+    "storageKey": "food-assets/asset_veg_biryani_1/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_veg_biryani_1/v1/480.webp",
+    "sha256Hash": "e475ddc1c5b7319e5d8d015fabc1fa15f71a7836a9007eda7fa928bdc6ba53a3",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 7648,
+    "sourceProvider": "Acropin Studio",
+    "licenseType": "CC-BY-4.0",
+    "licenseEvidence": "https://creativecommons.org/licenses/by/4.0/",
+    "requiredAttribution": "Spice Kitchen Archives",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-26T10:09:12.667Z",
+    "updatedAt": "2026-10-26T10:09:12.667Z",
+    "tags": [
+      "indian",
+      "veg",
+      "seed-catalog"
+    ]
+  },
+  {
+    "id": "asset_garlic_naan_1",
+    "canonicalDishId": "dish_garlic_naan",
+    "dishName": "Garlic Naan",
+    "storageKey": "food-assets/asset_garlic_naan_1/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_garlic_naan_1/v1/480.webp",
+    "sha256Hash": "d4deace6acf958f22c7427809bbc1e91c9cb4f23e11e3d2e89bce08a68de016a",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 7810,
+    "sourceProvider": "Acropin Studio",
+    "licenseType": "CC0",
+    "licenseEvidence": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "requiredAttribution": "Public Domain Culinary Works",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-26T10:09:12.911Z",
+    "updatedAt": "2026-10-26T10:09:12.911Z",
+    "tags": [
+      "north indian",
+      "veg",
+      "seed-catalog"
+    ]
+  },
+  {
+    "id": "asset_samosa_1",
+    "canonicalDishId": "dish_samosa",
+    "dishName": "Vegetable Samosa",
+    "storageKey": "food-assets/asset_samosa_1/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_samosa_1/v1/480.webp",
+    "sha256Hash": "6bbed3a6c7109d4527c9ffea5ef2b79c857f440143e70023edc33b247fa8a1c5",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 6608,
+    "sourceProvider": "Acropin Studio",
+    "licenseType": "Studio-Acropin-Proprietary",
+    "licenseEvidence": "acropin://licensing/assets/samosa_v1",
+    "requiredAttribution": "Acropin Culinary Studio",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-26T10:09:13.146Z",
+    "updatedAt": "2026-10-26T10:09:13.146Z",
+    "tags": [
+      "indian",
+      "vegan",
+      "seed-catalog"
+    ]
+  },
+  {
+    "id": "asset_gulab_jamun_1",
+    "canonicalDishId": "dish_gulab_jamun",
+    "dishName": "Gulab Jamun",
+    "storageKey": "food-assets/asset_gulab_jamun_1/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_gulab_jamun_1/v1/480.webp",
+    "sha256Hash": "b1a03a1a32e0228b2c2ceb2db46f6013d8c07242bd618a3077f456a12612ae77",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 6702,
+    "sourceProvider": "Acropin Studio",
+    "licenseType": "CC0",
+    "licenseEvidence": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "requiredAttribution": "Heritage Sweets Collection",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-26T10:09:13.408Z",
+    "updatedAt": "2026-10-26T10:09:13.408Z",
+    "tags": [
+      "indian",
+      "veg",
+      "seed-catalog"
+    ]
+  },
+  {
+    "id": "asset_margherita_pizza_1",
+    "canonicalDishId": "dish_margherita_pizza",
+    "dishName": "Margherita Pizza",
+    "storageKey": "food-assets/asset_margherita_pizza_1/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_margherita_pizza_1/v1/480.webp",
+    "sha256Hash": "71c09427da1ee84d04da8556c9c2e730f7ea69285afeea4d4e371ccbf838a268",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 7638,
+    "sourceProvider": "Acropin Studio",
+    "licenseType": "Studio-Acropin-Proprietary",
+    "licenseEvidence": "acropin://licensing/assets/margherita_v1",
+    "requiredAttribution": "Acropin Artisan Pizzaiolo",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-26T10:09:13.650Z",
+    "updatedAt": "2026-10-26T10:09:13.650Z",
+    "tags": [
+      "italian",
+      "veg",
+      "seed-catalog"
+    ]
+  },
+  {
+    "id": "asset_pepperoni_pizza_1",
+    "canonicalDishId": "dish_pepperoni_pizza",
+    "dishName": "Pepperoni Pizza",
+    "storageKey": "food-assets/asset_pepperoni_pizza_1/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_pepperoni_pizza_1/v1/480.webp",
+    "sha256Hash": "4e9e5e2da0a78da3243c944911829edc4942b67cc685669be5b21a1975b73ddb",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 7754,
+    "sourceProvider": "Acropin Studio",
+    "licenseType": "CC-BY-4.0",
+    "licenseEvidence": "https://creativecommons.org/licenses/by/4.0/",
+    "requiredAttribution": "Napoli Woodfire Guild",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-26T10:09:13.895Z",
+    "updatedAt": "2026-10-26T10:09:13.895Z",
+    "tags": [
+      "italian-american",
+      "non-veg",
+      "seed-catalog"
+    ]
+  },
+  {
+    "id": "asset_carbonara_1",
+    "canonicalDishId": "dish_spaghetti_carbonara",
+    "dishName": "Spaghetti Carbonara",
+    "storageKey": "food-assets/asset_carbonara_1/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_carbonara_1/v1/480.webp",
+    "sha256Hash": "d90e425fa567ba4e01311b9251596b9f437029613e78ace2423d9bd6d078a4b5",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 7328,
+    "sourceProvider": "Acropin Studio",
+    "licenseType": "Studio-Acropin-Proprietary",
+    "licenseEvidence": "acropin://licensing/assets/carbonara_v1",
+    "requiredAttribution": "Trattoria Romana Series",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-26T10:09:14.129Z",
+    "updatedAt": "2026-10-26T10:09:14.129Z",
+    "tags": [
+      "italian",
+      "non-veg",
+      "seed-catalog"
+    ]
+  },
+  {
+    "id": "asset_penne_arrabbiata_1",
+    "canonicalDishId": "dish_penne_arrabbiata",
+    "dishName": "Penne all Arrabbiata",
+    "storageKey": "food-assets/asset_penne_arrabbiata_1/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_penne_arrabbiata_1/v1/480.webp",
+    "sha256Hash": "8d18b8b1e3d68e378fc391d0cd7b05afe7a6d76db23aae0b463a9ed62561cf4a",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 7642,
+    "sourceProvider": "Acropin Studio",
+    "licenseType": "CC0",
+    "licenseEvidence": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "requiredAttribution": "Cucina Povera Project",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-26T10:09:14.401Z",
+    "updatedAt": "2026-10-26T10:09:14.401Z",
+    "tags": [
+      "italian",
+      "vegan",
+      "seed-catalog"
+    ]
+  },
+  {
+    "id": "asset_tiramisu_1",
+    "canonicalDishId": "dish_tiramisu",
+    "dishName": "Classic Tiramisu",
+    "storageKey": "food-assets/asset_tiramisu_1/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_tiramisu_1/v1/480.webp",
+    "sha256Hash": "242e78866fd63d69988bf1d94a6882033b450aabdfeea4dbd01829427d458e27",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 7740,
+    "sourceProvider": "Acropin Studio",
+    "licenseType": "Studio-Acropin-Proprietary",
+    "licenseEvidence": "acropin://licensing/assets/tiramisu_v1",
+    "requiredAttribution": "Pastry Masterworks",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-26T10:09:14.641Z",
+    "updatedAt": "2026-10-26T10:09:14.641Z",
+    "tags": [
+      "italian",
+      "veg",
+      "seed-catalog"
+    ]
+  },
+  {
+    "id": "asset_pad_thai_1",
+    "canonicalDishId": "dish_pad_thai",
+    "dishName": "Pad Thai Noodles",
+    "storageKey": "food-assets/asset_pad_thai_1/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_pad_thai_1/v1/480.webp",
+    "sha256Hash": "9d17dd72d3587754bb2cb3b1ee42210dc2ae7b7a58d151608c0ebb0eccab3483",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 7948,
+    "sourceProvider": "Acropin Studio",
+    "licenseType": "CC-BY-4.0",
+    "licenseEvidence": "https://creativecommons.org/licenses/by/4.0/",
+    "requiredAttribution": "Bangkok Street Food Library",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-26T10:09:14.879Z",
+    "updatedAt": "2026-10-26T10:09:14.879Z",
+    "tags": [
+      "thai",
+      "non-veg",
+      "seed-catalog"
+    ]
+  },
+  {
+    "id": "asset_tonkotsu_ramen_1",
+    "canonicalDishId": "dish_tonkotsu_ramen",
+    "dishName": "Tonkotsu Ramen",
+    "storageKey": "food-assets/asset_tonkotsu_ramen_1/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_tonkotsu_ramen_1/v1/480.webp",
+    "sha256Hash": "771354d50c3b739525768dadc36c17848d602c711605ff4f876094e1f84a1a13",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 6500,
+    "sourceProvider": "Acropin Studio",
+    "licenseType": "Studio-Acropin-Proprietary",
+    "licenseEvidence": "acropin://licensing/assets/ramen_v1",
+    "requiredAttribution": "Tokyo Noodle Guild",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-26T10:09:15.140Z",
+    "updatedAt": "2026-10-26T10:09:15.140Z",
+    "tags": [
+      "japanese",
+      "non-veg",
+      "seed-catalog"
+    ]
+  },
+  {
+    "id": "asset_cheeseburger_1",
+    "canonicalDishId": "dish_classic_cheeseburger",
+    "dishName": "Classic Cheeseburger",
+    "storageKey": "food-assets/asset_cheeseburger_1/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_cheeseburger_1/v1/480.webp",
+    "sha256Hash": "4ee516cfcbc698805a706ef16163a4b66cfd204b871cf11051bb47a1db94fdf8",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 8694,
+    "sourceProvider": "Acropin Studio",
+    "licenseType": "Unsplash-Commercial",
+    "licenseEvidence": "https://unsplash.com/license",
+    "requiredAttribution": "Diner Craft Photo Lab",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-26T10:09:15.383Z",
+    "updatedAt": "2026-10-26T10:09:15.383Z",
+    "tags": [
+      "american",
+      "non-veg",
+      "seed-catalog"
+    ]
+  },
+  {
+    "id": "asset_caesar_salad_1",
+    "canonicalDishId": "dish_caesar_salad",
+    "dishName": "Caesar Salad",
+    "storageKey": "food-assets/asset_caesar_salad_1/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_caesar_salad_1/v1/480.webp",
+    "sha256Hash": "38157be4b11f5ffd909fc6eaaa937c277d3bb08abaa315cff4525f54167f3bc2",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 7128,
+    "sourceProvider": "Acropin Studio",
+    "licenseType": "CC0",
+    "licenseEvidence": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "requiredAttribution": "Green Leaf Commons",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-26T10:09:15.620Z",
+    "updatedAt": "2026-10-26T10:09:15.620Z",
+    "tags": [
+      "continental",
+      "veg",
+      "seed-catalog"
+    ]
+  },
+  {
+    "id": "asset_mango_lassi_1",
+    "canonicalDishId": "dish_mango_lassi",
+    "dishName": "Mango Lassi",
+    "storageKey": "food-assets/asset_mango_lassi_1/v1/480.webp",
+    "publicUrl": "/api/images/food-assets/asset_mango_lassi_1/v1/480.webp",
+    "sha256Hash": "5450183ff895ee5c52f0646820eb503f6b2d0eeee54306ea220ee9d6bbb1486f",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 6824,
+    "sourceProvider": "Acropin Studio",
+    "licenseType": "Studio-Acropin-Proprietary",
+    "licenseEvidence": "acropin://licensing/assets/mango_lassi_v1",
+    "requiredAttribution": "Acropin Beverages",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-26T10:09:15.883Z",
+    "updatedAt": "2026-10-26T10:09:15.883Z",
+    "tags": [
+      "indian",
+      "veg",
+      "seed-catalog"
+    ]
+  }
+]

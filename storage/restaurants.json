@@ -1,0 +1,563 @@
+[
+  {
+    "id": "menu_spice_garden",
+    "restaurantId": "rest_spice_garden",
+    "restaurantName": "Spice Garden Indian Bistro",
+    "tagline": "Artisanal North Indian Curries & Tandoori Specialties",
+    "cuisine": "Indian",
+    "categories": [
+      "Appetizers",
+      "Mains",
+      "Rice & Biryani",
+      "Breads",
+      "Desserts",
+      "Beverages"
+    ],
+    "updatedAt": "2026-10-26T10:16:06.362Z",
+    "items": [
+      {
+        "id": "item_sg_1",
+        "name": "Paneer Butter Masala",
+        "category": "Mains",
+        "price": 16.5,
+        "description": "Velvety cottage cheese in aromatic tomato, cashew, and churned butter sauce.",
+        "dietary": "veg",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793009766362_fhry",
+          "restaurantId": "rest_spice_garden",
+          "menuItemId": "item_sg_1",
+          "imageAssetId": "asset_paneer_butter_masala_1",
+          "assignmentMethod": "retained_previous",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-26T10:16:06.362Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-26T10:16:06.362Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_paneer_butter_masala_1",
+              "reason": "Import commit (preserved_existing)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_sg_2",
+        "name": "Butter Chicken (Murgh Makhani)",
+        "category": "Mains",
+        "price": 18,
+        "description": "Tandoori grilled chicken steeped in rich tomato cream and fenugreek reduction.",
+        "dietary": "non-veg",
+        "isAvailable": true
+      },
+      {
+        "id": "item_1793009764511_2",
+        "name": "Authentic Dal Makhani",
+        "category": "Mains",
+        "price": 13.5,
+        "description": "Slow cooked black urad dal with churned butter.",
+        "dietary": "veg",
+        "isAvailable": true
+      },
+      {
+        "id": "item_1793009764512_3",
+        "name": "Tandoori Garlic Naan",
+        "category": "Breads",
+        "price": 4.5,
+        "description": "Fresh garlic brushed clay oven naan.",
+        "dietary": "veg",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793009766362_7rkf",
+          "restaurantId": "rest_spice_garden",
+          "menuItemId": "item_1793009764512_3",
+          "imageAssetId": "asset_garlic_naan_1",
+          "assignmentMethod": "automatic_alias",
+          "matchConfidence": 0.95,
+          "assignedAt": "2026-10-26T10:16:06.362Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-26T10:16:06.362Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_garlic_naan_1",
+              "reason": "Import commit (new_assignment)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793009764512_4",
+        "name": "Vegetable Dum Biryani",
+        "category": "Rice & Biryani",
+        "price": 15,
+        "description": "Aromatic basmati rice layered with seasonal vegetables and saffron.",
+        "dietary": "veg",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793009766362_2vwr",
+          "restaurantId": "rest_spice_garden",
+          "menuItemId": "item_1793009764512_4",
+          "imageAssetId": "asset_veg_biryani_1",
+          "assignmentMethod": "automatic_alias",
+          "matchConfidence": 0.95,
+          "assignedAt": "2026-10-26T10:16:06.362Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-26T10:16:06.362Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_veg_biryani_1",
+              "reason": "Import commit (new_assignment)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793009764512_5",
+        "name": "Spicy Artisanal Stonebaked Pizza",
+        "category": "Chef Specials",
+        "price": 17.5,
+        "description": "Fusion flatbread pizza with herbs and mozzarella.",
+        "isAvailable": true
+      },
+      {
+        "id": "item_1793009764515_6",
+        "name": "Monsoon Chai & Pakora Basket",
+        "category": "Appetizers",
+        "price": 8.5,
+        "description": "Crispy onion fritters served with steamed spiced tea.",
+        "dietary": "veg",
+        "isAvailable": true
+      }
+    ]
+  },
+  {
+    "id": "menu_bella_tavola",
+    "restaurantId": "rest_bella_tavola",
+    "restaurantName": "Bella Tavola Cucina",
+    "tagline": "Authentic Roman Pasta, Woodfired Pizza & Dolci",
+    "cuisine": "Italian",
+    "categories": [
+      "Antipasti",
+      "Pizza",
+      "Pasta",
+      "Dolci"
+    ],
+    "updatedAt": "2026-10-26T10:09:15.883Z",
+    "items": [
+      {
+        "id": "item_bt_1",
+        "name": "Classic Margherita Pizza",
+        "category": "Pizza",
+        "price": 16,
+        "description": "San Marzano tomatoes, fior di latte mozzarella, fresh basil, and extra virgin olive oil.",
+        "dietary": "veg",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_bt_1",
+          "restaurantId": "rest_bella_tavola",
+          "menuItemId": "item_bt_1",
+          "imageAssetId": "asset_margherita_pizza_1",
+          "assignmentMethod": "automatic_exact",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-26T10:09:15.883Z",
+          "assignedBy": "system",
+          "isLocked": false,
+          "auditTrail": []
+        }
+      },
+      {
+        "id": "item_bt_2",
+        "name": "Spicy Pepperoni Pizza",
+        "category": "Pizza",
+        "price": 18.5,
+        "description": "Crisp hand-stretched dough with artisanal pepperoni slices and melted mozzarella.",
+        "dietary": "non-veg",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_bt_2",
+          "restaurantId": "rest_bella_tavola",
+          "menuItemId": "item_bt_2",
+          "imageAssetId": "asset_pepperoni_pizza_1",
+          "assignmentMethod": "automatic_alias",
+          "matchConfidence": 0.95,
+          "assignedAt": "2026-10-26T10:09:15.883Z",
+          "assignedBy": "system",
+          "isLocked": false,
+          "auditTrail": []
+        }
+      },
+      {
+        "id": "item_bt_3",
+        "name": "Spaghetti Carbonara",
+        "category": "Pasta",
+        "price": 19,
+        "description": "Traditional Roman recipe with crispy guanciale, pecorino romano, egg yolks, black pepper.",
+        "dietary": "non-veg",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_bt_3",
+          "restaurantId": "rest_bella_tavola",
+          "menuItemId": "item_bt_3",
+          "imageAssetId": "asset_carbonara_1",
+          "assignmentMethod": "automatic_exact",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-26T10:09:15.883Z",
+          "assignedBy": "system",
+          "isLocked": false,
+          "auditTrail": []
+        }
+      },
+      {
+        "id": "item_bt_4",
+        "name": "Penne all Arrabbiata",
+        "category": "Pasta",
+        "price": 15,
+        "description": "Al dente penne pasta in a vibrant garlic, fiery chili, and San Marzano tomato pomodoro.",
+        "dietary": "vegan",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_bt_4",
+          "restaurantId": "rest_bella_tavola",
+          "menuItemId": "item_bt_4",
+          "imageAssetId": "asset_penne_arrabbiata_1",
+          "assignmentMethod": "automatic_exact",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-26T10:09:15.883Z",
+          "assignedBy": "system",
+          "isLocked": false,
+          "auditTrail": []
+        }
+      },
+      {
+        "id": "item_bt_5",
+        "name": "Classic Tiramisu",
+        "category": "Dolci",
+        "price": 8.5,
+        "description": "Savoiardi ladyfingers steeped in espresso and marsala, layered with whipped mascarpone.",
+        "dietary": "veg",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_bt_5",
+          "restaurantId": "rest_bella_tavola",
+          "menuItemId": "item_bt_5",
+          "imageAssetId": "asset_tiramisu_1",
+          "assignmentMethod": "automatic_exact",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-26T10:09:15.883Z",
+          "assignedBy": "system",
+          "isLocked": false,
+          "auditTrail": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "menu_rest_test_1793009652751",
+    "restaurantId": "rest_test_1793009652751",
+    "restaurantName": "Test Bistro",
+    "tagline": "Test Bistro Tagline",
+    "cuisine": "Indian",
+    "categories": [
+      "Mains"
+    ],
+    "updatedAt": "2026-10-26T10:14:12.761Z",
+    "items": [
+      {
+        "id": "item_test_1",
+        "name": "Paneer Butter Masala",
+        "category": "Mains",
+        "price": 16,
+        "description": "Updated description",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793009652761_stab",
+          "restaurantId": "rest_test_1793009652751",
+          "menuItemId": "item_test_1",
+          "imageAssetId": "asset_paneer_butter_masala_1",
+          "assignmentMethod": "retained_previous",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-26T10:14:12.760Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-26T10:14:12.760Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_paneer_butter_masala_1",
+              "reason": "Import commit (preserved_existing)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793009652752_1",
+        "name": "Margherita Pizza",
+        "category": "Fusion Specials",
+        "price": 18,
+        "description": "Fresh basil and mozzarella",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793009652761_weva",
+          "restaurantId": "rest_test_1793009652751",
+          "menuItemId": "item_1793009652752_1",
+          "imageAssetId": "asset_margherita_pizza_1",
+          "assignmentMethod": "automatic_exact",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-26T10:14:12.760Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-26T10:14:12.760Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_margherita_pizza_1",
+              "reason": "Import commit (new_assignment)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793009652753_2",
+        "name": "Unknown Dragon Stew",
+        "category": "Exotics",
+        "price": 25,
+        "description": "",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793009652761_vj7j",
+          "restaurantId": "rest_test_1793009652751",
+          "menuItemId": "item_1793009652753_2",
+          "imageAssetId": "asset_tiramisu_1",
+          "assignmentMethod": "manual_owner",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-26T10:14:12.761Z",
+          "assignedBy": "owner_marcus",
+          "isLocked": true,
+          "isRevokedFallback": false,
+          "auditTrail": [
+            {
+              "action": "reassigned",
+              "timestamp": "2026-10-26T10:14:12.761Z",
+              "actor": "owner_marcus",
+              "newAssetId": "asset_tiramisu_1",
+              "reason": "Manual owner selection from Image Library"
+            }
+          ]
+        },
+        "resolvedImageUrl": "/api/images/food-assets/asset_tiramisu_1/v1/480.webp",
+        "attribution": "Pastry Masterworks"
+      }
+    ]
+  },
+  {
+    "id": "menu_rest_test_1793009862983",
+    "restaurantId": "rest_test_1793009862983",
+    "restaurantName": "Test Bistro",
+    "tagline": "Test Bistro Tagline",
+    "cuisine": "Indian",
+    "categories": [
+      "Mains"
+    ],
+    "updatedAt": "2026-10-26T10:17:42.993Z",
+    "items": [
+      {
+        "id": "item_test_1",
+        "name": "Paneer Butter Masala",
+        "category": "Mains",
+        "price": 16,
+        "description": "Updated description",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793009862992_nur4",
+          "restaurantId": "rest_test_1793009862983",
+          "menuItemId": "item_test_1",
+          "imageAssetId": "asset_paneer_butter_masala_1",
+          "assignmentMethod": "retained_previous",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-26T10:17:42.992Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-26T10:17:42.992Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_paneer_butter_masala_1",
+              "reason": "Import commit (preserved_existing)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793009862985_1",
+        "name": "Margherita Pizza",
+        "category": "Fusion Specials",
+        "price": 18,
+        "description": "Fresh basil and mozzarella",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793009862992_q5mw",
+          "restaurantId": "rest_test_1793009862983",
+          "menuItemId": "item_1793009862985_1",
+          "imageAssetId": "asset_margherita_pizza_1",
+          "assignmentMethod": "automatic_exact",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-26T10:17:42.992Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-26T10:17:42.992Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_margherita_pizza_1",
+              "reason": "Import commit (new_assignment)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793009862985_2",
+        "name": "Unknown Dragon Stew",
+        "category": "Exotics",
+        "price": 25,
+        "description": "",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793009862993_5d02",
+          "restaurantId": "rest_test_1793009862983",
+          "menuItemId": "item_1793009862985_2",
+          "imageAssetId": "asset_tiramisu_1",
+          "assignmentMethod": "manual_owner",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-26T10:17:42.993Z",
+          "assignedBy": "owner_marcus",
+          "isLocked": true,
+          "isRevokedFallback": false,
+          "auditTrail": [
+            {
+              "action": "reassigned",
+              "timestamp": "2026-10-26T10:17:42.993Z",
+              "actor": "owner_marcus",
+              "newAssetId": "asset_tiramisu_1",
+              "reason": "Manual owner selection from Image Library"
+            }
+          ]
+        },
+        "resolvedImageUrl": "/api/images/food-assets/asset_tiramisu_1/v1/480.webp",
+        "attribution": "Pastry Masterworks"
+      }
+    ]
+  },
+  {
+    "id": "menu_rest_test_1793010314096",
+    "restaurantId": "rest_test_1793010314096",
+    "restaurantName": "Test Bistro",
+    "tagline": "Test Bistro Tagline",
+    "cuisine": "Indian",
+    "categories": [
+      "Mains"
+    ],
+    "updatedAt": "2026-10-26T10:25:14.111Z",
+    "items": [
+      {
+        "id": "item_test_1",
+        "name": "Paneer Butter Masala",
+        "category": "Mains",
+        "price": 16,
+        "description": "Updated description",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793010314110_e0wa",
+          "restaurantId": "rest_test_1793010314096",
+          "menuItemId": "item_test_1",
+          "imageAssetId": "asset_paneer_butter_masala_1",
+          "assignmentMethod": "retained_previous",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-26T10:25:14.110Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-26T10:25:14.110Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_paneer_butter_masala_1",
+              "reason": "Import commit (preserved_existing)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793010314098_1",
+        "name": "Margherita Pizza",
+        "category": "Fusion Specials",
+        "price": 18,
+        "description": "Fresh basil and mozzarella",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793010314110_9fxt",
+          "restaurantId": "rest_test_1793010314096",
+          "menuItemId": "item_1793010314098_1",
+          "imageAssetId": "asset_margherita_pizza_1",
+          "assignmentMethod": "automatic_exact",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-26T10:25:14.110Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-26T10:25:14.110Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_margherita_pizza_1",
+              "reason": "Import commit (new_assignment)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793010314099_2",
+        "name": "Unknown Dragon Stew",
+        "category": "Exotics",
+        "price": 25,
+        "description": "",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793010314111_bnhl",
+          "restaurantId": "rest_test_1793010314096",
+          "menuItemId": "item_1793010314099_2",
+          "imageAssetId": "asset_tiramisu_1",
+          "assignmentMethod": "manual_owner",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-26T10:25:14.111Z",
+          "assignedBy": "owner_marcus",
+          "isLocked": true,
+          "isRevokedFallback": false,
+          "auditTrail": [
+            {
+              "action": "reassigned",
+              "timestamp": "2026-10-26T10:25:14.111Z",
+              "actor": "owner_marcus",
+              "newAssetId": "asset_tiramisu_1",
+              "reason": "Manual owner selection from Image Library"
+            }
+          ]
+        },
+        "resolvedImageUrl": "/api/images/food-assets/asset_tiramisu_1/v1/480.webp",
+        "attribution": "Pastry Masterworks"
+      }
+    ]
+  }
+]

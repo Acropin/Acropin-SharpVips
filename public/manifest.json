@@ -1,0 +1,20 @@
+{
+  "short_name": "Acropin",
+  "name": "Acropin Restaurant Food Library & Customer Menu",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0f172a",
+  "theme_color": "#f97316",
+  "display": "standalone"
+}
