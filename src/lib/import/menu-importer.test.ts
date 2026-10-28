@@ -5,7 +5,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { initializeCatalog } from '../server/catalog-store';
+import { initializeCatalog, registerAsset } from '../server/catalog-store';
 import { initializeRestaurants, getRestaurantMenu, updateMenuItemAssignment, saveRestaurantMenu } from '../server/restaurant-store';
 import { generateImportPreview, commitMenuImport } from './menu-importer';
 
@@ -13,6 +13,82 @@ test('menu importer lifecycle: preview, auto-assign, preserve, and lock', async 
   // 1. Initialize stores
   await initializeCatalog();
   initializeRestaurants();
+
+  // Register fixture assets for the test lifecycle
+  registerAsset({
+    id: 'asset_paneer_butter_masala_1',
+    universalName: 'paneer-butter-masala',
+    filename: 'paneer-butter-masala.webp',
+    dishName: 'Paneer Butter Masala',
+    canonicalDishId: 'dish_paneer_butter_masala',
+    storageKey: 'food-assets/paneer-butter-masala/480.webp',
+    publicUrl: '/api/images/food-assets/paneer-butter-masala/480.webp',
+    sha256Hash: 'dummyhash1',
+    width: 480,
+    height: 480,
+    format: 'webp',
+    byteSize: 25000,
+    sourceProvider: 'Test Provider',
+    licenseType: 'CC0',
+    licenseEvidence: 'Test Evidence',
+    processingVersion: 'v1',
+    processingQuality: 78,
+    focalPoint: { x: 0.5, y: 0.5 },
+    approvalStatus: 'approved',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    tags: ['fixture'],
+  });
+
+  registerAsset({
+    id: 'asset_margherita_pizza_1',
+    universalName: 'margherita-pizza',
+    filename: 'margherita-pizza.webp',
+    dishName: 'Margherita Pizza',
+    canonicalDishId: 'dish_margherita_pizza',
+    storageKey: 'food-assets/margherita-pizza/480.webp',
+    publicUrl: '/api/images/food-assets/margherita-pizza/480.webp',
+    sha256Hash: 'dummyhash2',
+    width: 480,
+    height: 480,
+    format: 'webp',
+    byteSize: 22000,
+    sourceProvider: 'Test Provider',
+    licenseType: 'CC0',
+    licenseEvidence: 'Test Evidence',
+    processingVersion: 'v1',
+    processingQuality: 78,
+    focalPoint: { x: 0.5, y: 0.5 },
+    approvalStatus: 'approved',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    tags: ['fixture'],
+  });
+
+  registerAsset({
+    id: 'asset_tiramisu_1',
+    universalName: 'tiramisu',
+    filename: 'tiramisu.webp',
+    dishName: 'Classic Tiramisu',
+    canonicalDishId: 'dish_tiramisu',
+    storageKey: 'food-assets/tiramisu/480.webp',
+    publicUrl: '/api/images/food-assets/tiramisu/480.webp',
+    sha256Hash: 'dummyhash3',
+    width: 480,
+    height: 480,
+    format: 'webp',
+    byteSize: 28000,
+    sourceProvider: 'Test Provider',
+    licenseType: 'CC0',
+    licenseEvidence: 'Test Evidence',
+    processingVersion: 'v1',
+    processingQuality: 78,
+    focalPoint: { x: 0.5, y: 0.5 },
+    approvalStatus: 'approved',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    tags: ['fixture'],
+  });
 
   const testTenant = `rest_test_${Date.now()}`;
   // Save an initial menu with just one item (Paneer Butter Masala)

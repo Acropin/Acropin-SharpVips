@@ -16,8 +16,10 @@ import {
   getAssetById,
   findAssetByHash,
   registerAsset,
+  deleteAsset,
   updateAssetStatus,
 } from './src/lib/server/catalog-store';
+import { toUniversalFoodName } from './src/lib/images/universal-naming';
 import {
   initializeRestaurants,
   getAllRestaurants,
@@ -56,34 +58,20 @@ initializeRestaurants();
 // -------------------------------------------------------------
 // Image Serving Route with Immutable CDN Caching Headers
 // -------------------------------------------------------------
-app.get('/api/images/food-assets/:assetId/:version/:filename', async (req, res) => {
-  const { assetId, version, filename } = req.params;
+app.get('/api/images/food-assets/*', async (req, res) => {
+  const relPath = (req.params as Record<string, string>)[0];
   const storage = getStorageProvider();
-  const key = `food-assets/${assetId}/${version}/${filename}`;
+  const key = `food-assets/${relPath}`;
 
   try {
-    const assetRecord = getAssetById(assetId);
-
-    // If revoked, do not serve to customer requests
-    if (assetRecord && assetRecord.approvalStatus === 'revoked') {
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.status(404).json({ error: 'Asset has been revoked for legal/licensing reasons.' });
-      return;
-    }
-
     const item = await storage.get(key);
     if (!item) {
       res.status(404).json({ error: 'Image asset not found.' });
       return;
     }
 
-    // Set immutable CDN cache headers for versioned immutable assets
     res.setHeader('Content-Type', item.contentType || 'image/webp');
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    if (assetRecord) {
-      res.setHeader('ETag', `"${assetRecord.sha256Hash}"`);
-    }
-
     res.send(item.data);
   } catch (err) {
     res.status(500).json({ error: 'Failed to retrieve image asset.' });
@@ -104,6 +92,20 @@ app.get('/api/images/catalog', (req, res) => {
   res.json({ assets, total: assets.length });
 });
 
+// Delete an asset from collection
+app.delete('/api/images/collection/:id', async (req, res) => {
+  try {
+    const success = await deleteAsset(req.params.id);
+    if (!success) {
+      res.status(404).json({ error: 'Asset not found in collection.' });
+      return;
+    }
+    res.json({ success: true, message: 'Asset deleted from library.' });
+  } catch (err: unknown) {
+    res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
 // Upload and process an image
 app.post('/api/images/upload', upload.single('image'), async (req, res) => {
   try {
@@ -114,6 +116,7 @@ app.post('/api/images/upload', upload.single('image'), async (req, res) => {
 
     const {
       dishName,
+      universalName: clientUniversalName,
       canonicalDishId,
       focalPointX,
       focalPointY,
@@ -121,7 +124,6 @@ app.post('/api/images/upload', upload.single('image'), async (req, res) => {
       licenseEvidence,
       requiredAttribution,
       sourceProvider,
-      autoApprove,
     } = req.body;
 
     const fx = focalPointX ? parseFloat(focalPointX) : 0.5;
@@ -136,44 +138,46 @@ app.post('/api/images/upload', upload.single('image'), async (req, res) => {
       focalPoint: { x: fx, y: fy },
     });
 
-    // Deduplication check: check if an identical image buffer hash already exists
-    const duplicateAsset = findAssetByHash(processed.hash);
-    const assetId = `asset_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const storageKey = buildVersionedStorageKey(assetId, 1);
+    // Derive standardized single universal food name and default filename
+    const targetRawName = clientUniversalName || dishName || req.file.originalname;
+    const universal = toUniversalFoodName(targetRawName);
+    const assetId = `asset_${universal.universalName}`;
+    const storageKey = `food-assets/${universal.universalName}/480.webp`;
     const storage = getStorageProvider();
 
-    // Upload to versioned key
     const uploadResult = await storage.upload(storageKey, processed.buffer, 'image/webp');
-
+    const duplicateAsset = findAssetByHash(processed.hash);
     const now = new Date().toISOString();
+
     const newAsset: ImageAsset = {
       id: assetId,
+      universalName: universal.universalName,
+      filename: universal.filename,
+      dishName: universal.displayName,
       canonicalDishId: canonicalDishId || undefined,
-      dishName: dishName || 'Uploaded Food Dish',
       storageKey,
       publicUrl: uploadResult.url,
       sha256Hash: processed.hash,
       width: processed.width,
       height: processed.height,
       format: 'webp',
+      originalByteSize: req.file.buffer.length,
       byteSize: processed.byteSize,
-      sourceProvider: sourceProvider || 'Restaurant Upload',
-      licenseType: (licenseType as LicenseType) || 'Custom-Commercial',
-      licenseEvidence: licenseEvidence || 'Owner upload consent',
+      sourceProvider: sourceProvider || 'Upload',
+      licenseType: (licenseType as LicenseType) || 'CC0',
+      licenseEvidence: licenseEvidence || 'Direct Upload',
       requiredAttribution: requiredAttribution || undefined,
       processingVersion: 'v1',
       processingQuality: processed.qualityUsed,
       focalPoint: { x: fx, y: fy },
-      approvalStatus: autoApprove === 'true' ? 'approved' : 'pending_review',
+      approvalStatus: 'approved',
       createdAt: now,
       updatedAt: now,
-      tags: [dishName ? dishName.toLowerCase() : 'custom-upload'],
+      tags: [universal.universalName, 'food-photo'],
     };
 
-    // Check for canonical dish match
-    const match = dishName ? matchCanonicalDish(dishName) : null;
-
     registerAsset(newAsset);
+    const match = matchCanonicalDish(universal.displayName);
 
     res.status(201).json({
       asset: newAsset,
@@ -182,6 +186,7 @@ app.post('/api/images/upload', upload.single('image'), async (req, res) => {
       existingDuplicateId: duplicateAsset?.id,
       warning: processed.sizeDeviationWarning,
       sourceDimensions: processed.sourceDimensions,
+      compressionRatio: ((1 - processed.byteSize / req.file.buffer.length) * 100).toFixed(1) + '%',
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -195,6 +200,7 @@ app.post('/api/images/process-url', async (req, res) => {
     const {
       imageUrl,
       dishName,
+      universalName: clientUniversalName,
       canonicalDishId,
       focalPointX,
       focalPointY,
@@ -269,41 +275,55 @@ app.post('/api/images/process-url', async (req, res) => {
       focalPoint: { x: fx, y: fy },
     });
 
-    const duplicateAsset = findAssetByHash(processed.hash);
-    const assetId = `asset_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const storageKey = buildVersionedStorageKey(assetId, 1);
+    // Derive standardized single universal food name and default filename
+    let rawRef = dishName;
+    if (!rawRef && !imageUrl.startsWith('data:')) {
+      try {
+        rawRef = new URL(imageUrl).pathname.split('/').pop() || 'food-item';
+      } catch {
+        rawRef = 'food-item';
+      }
+    }
+
+    const universal = toUniversalFoodName(clientUniversalName || rawRef || 'food-dish');
+    const assetId = `asset_${universal.universalName}`;
+    const storageKey = `food-assets/${universal.universalName}/480.webp`;
     const storage = getStorageProvider();
 
     const uploadResult = await storage.upload(storageKey, processed.buffer, 'image/webp');
+    const duplicateAsset = findAssetByHash(processed.hash);
     const now = new Date().toISOString();
 
     const newAsset: ImageAsset = {
       id: assetId,
+      universalName: universal.universalName,
+      filename: universal.filename,
+      dishName: universal.displayName,
       canonicalDishId: canonicalDishId || undefined,
-      dishName: dishName || 'Open Source Food Dish',
       storageKey,
       publicUrl: uploadResult.url,
       sha256Hash: processed.hash,
       width: processed.width,
       height: processed.height,
       format: 'webp',
+      originalByteSize: buffer.length,
       byteSize: processed.byteSize,
-      sourceUrl: imageUrl,
-      sourceProvider: sourceProvider || new URL(imageUrl).hostname,
+      sourceUrl: imageUrl.startsWith('data:') ? undefined : imageUrl,
+      sourceProvider: sourceProvider || (imageUrl.startsWith('data:') ? 'Pasted Image' : new URL(imageUrl).hostname),
       licenseType: (licenseType as LicenseType) || 'CC0',
-      licenseEvidence: licenseEvidence || imageUrl,
-      requiredAttribution: requiredAttribution || `Source: ${new URL(imageUrl).hostname}`,
+      licenseEvidence: licenseEvidence || (imageUrl.startsWith('data:') ? 'Clipboard' : imageUrl),
+      requiredAttribution: requiredAttribution || undefined,
       processingVersion: 'v1',
       processingQuality: processed.qualityUsed,
       focalPoint: { x: fx, y: fy },
       approvalStatus: 'approved',
       createdAt: now,
       updatedAt: now,
-      tags: [dishName ? dishName.toLowerCase() : 'open-source-url'],
+      tags: [universal.universalName, 'open-source-url'],
     };
 
     registerAsset(newAsset);
-    const match = dishName ? matchCanonicalDish(dishName) : null;
+    const match = matchCanonicalDish(universal.displayName);
 
     res.status(201).json({
       asset: newAsset,
@@ -312,6 +332,7 @@ app.post('/api/images/process-url', async (req, res) => {
       existingDuplicateId: duplicateAsset?.id,
       warning: processed.sizeDeviationWarning,
       sourceDimensions: processed.sourceDimensions,
+      compressionRatio: ((1 - processed.byteSize / buffer.length) * 100).toFixed(1) + '%',
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

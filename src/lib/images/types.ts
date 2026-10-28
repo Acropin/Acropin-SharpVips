@@ -68,6 +68,9 @@ export interface ImageAsset {
   updatedAt: string;
   tags: string[];
   dishName: string;
+  universalName: string; // clean universal slug, e.g. "margherita-pizza"
+  filename: string; // default single name format, e.g. "margherita-pizza.webp"
+  originalByteSize?: number;
 }
 
 export interface CanonicalDish {
