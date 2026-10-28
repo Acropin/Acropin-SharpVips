@@ -1,6 +1,6 @@
 {
   "name": "acropin-food-images",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Open food image catalog for menus and food applications",
   "type": "module",
   "license": "Apache-2.0",
@@ -10,7 +10,13 @@
     "directory": "packages/food-images"
   },
   "homepage": "https://github.com/Acropin/Acropin-SharpVips/tree/main/packages/food-images",
-  "keywords": ["food", "images", "menu", "webp", "restaurant"],
+  "keywords": [
+    "food",
+    "images",
+    "menu",
+    "webp",
+    "restaurant"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -25,7 +31,11 @@
     "./catalog.json": "./dist/catalog.json",
     "./assets/*": "./dist/assets/*"
   },
-  "files": ["dist/**", "README.md", "LICENSE"],
+  "files": [
+    "dist/**",
+    "README.md",
+    "LICENSE"
+  ],
   "sideEffects": false,
   "scripts": {
     "prepack": "npm --prefix ../.. run build:food-images"
