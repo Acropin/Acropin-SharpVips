@@ -18,6 +18,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./api": {
+      "types": "./dist/api.d.ts",
+      "import": "./dist/api.js"
+    },
     "./catalog.json": "./dist/catalog.json",
     "./assets/*": "./dist/assets/*"
   },

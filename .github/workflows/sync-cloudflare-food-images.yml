@@ -1,0 +1,55 @@
+name: Sync approved food images to Cloudflare
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "packages/food-images/contributions/**"
+      - "scripts/build-food-images.ts"
+      - "scripts/sync-cloudflare-catalog.ts"
+      - "src/lib/images/process-image.ts"
+      - "cloudflare/worker.ts"
+      - "cloudflare/migrations/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/sync-cloudflare-food-images.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-food-catalog-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build:food-images
+      - name: Check Cloudflare sync configuration
+        id: cloudflare
+        env:
+          CLOUDFLARE_FOOD_API_URL: ${{ secrets.CLOUDFLARE_FOOD_API_URL }}
+          CLOUDFLARE_OWNER_API_KEY: ${{ secrets.CLOUDFLARE_OWNER_API_KEY }}
+        run: |
+          if [[ -n "$CLOUDFLARE_FOOD_API_URL" && -n "$CLOUDFLARE_OWNER_API_KEY" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Sync catalog to Cloudflare
+        if: steps.cloudflare.outputs.configured == 'true'
+        env:
+          CLOUDFLARE_FOOD_API_URL: ${{ secrets.CLOUDFLARE_FOOD_API_URL }}
+          CLOUDFLARE_OWNER_API_KEY: ${{ secrets.CLOUDFLARE_OWNER_API_KEY }}
+        run: npm run cloudflare:sync
+      - name: Report missing Cloudflare secrets
+        if: steps.cloudflare.outputs.configured == 'false'
+        run: echo "Cloudflare sync skipped; configure CLOUDFLARE_FOOD_API_URL and CLOUDFLARE_OWNER_API_KEY repository secrets."

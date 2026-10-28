@@ -14,6 +14,11 @@
     "start": "tsx server.ts",
     "prebuild": "npm run build:food-images",
     "build": "vite build",
+    "cloudflare:dev": "wrangler dev",
+    "cloudflare:lint": "tsc --noEmit -p cloudflare/tsconfig.json",
+    "cloudflare:deploy": "npm run build && wrangler deploy",
+    "cloudflare:migrate": "wrangler d1 migrations apply acropin-food-catalog --remote",
+    "cloudflare:sync": "node --import tsx scripts/sync-cloudflare-catalog.ts",
     "test": "npx --yes tsx --test src/**/*.test.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
@@ -37,6 +42,7 @@
     "vite": "^8.3.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261028.1",
     "@types/express": "^4.17.21",
     "@types/multer": "^2.3.0",
     "@types/node": "^22.14.0",
@@ -46,7 +52,8 @@
     "autoprefixer": "^10.4.21",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "wrangler": "^4.154.0"
   },
   "allowScripts": {
     "esbuild@0.28.2": true,

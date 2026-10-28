@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "packages/food-images/contributions/**"
+      - "packages/food-images/api-client.*"
       - "scripts/build-food-images.ts"
       - "src/lib/images/process-image.ts"
       - "packages/food-images/package.json"

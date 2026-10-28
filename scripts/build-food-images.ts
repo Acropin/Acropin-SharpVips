@@ -10,6 +10,7 @@ import { processFoodImage } from '../src/lib/images/process-image.js';
 
 type ContributionMetadata = {
   dishName: string;
+  category: string;
   canonicalDishId?: string;
   tags: string[];
   creator: string;
@@ -34,6 +35,7 @@ const prohibitedSourceHosts = [
   'adobe.com',
   'freepik.com',
 ];
+const variantSizes = [480, 960, 1600] as const;
 
 function fail(slug: string, message: string): never {
   throw new Error(`Contribution "${slug}": ${message}`);
@@ -68,6 +70,10 @@ function validateMetadata(value: unknown, slug: string): ContributionMetadata {
     fail(slug, 'dishName must be between 2 and 100 characters.');
   }
   if (/replace with/i.test(data.dishName)) fail(slug, 'replace the dishName example text.');
+  const category = typeof data.category === 'string' ? data.category.trim().toLowerCase() : 'food';
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(category) || category.length > 80) {
+    fail(slug, 'category must be a short lowercase kebab-case value such as "pizza", "fruit", or "beverages".');
+  }
   if (typeof data.creator !== 'string' || data.creator.trim().length < 2) {
     fail(slug, 'creator must identify the image creator or rightsholder.');
   }
@@ -108,6 +114,7 @@ function validateMetadata(value: unknown, slug: string): ContributionMetadata {
   }
   return {
     dishName: data.dishName.trim(),
+    category,
     canonicalDishId: typeof data.canonicalDishId === 'string' && data.canonicalDishId.trim() ? data.canonicalDishId.trim() : undefined,
     tags: normalizedTags(data.tags, slug),
     creator: data.creator.trim(),
@@ -132,6 +139,8 @@ async function main() {
 
   await fs.rm(outputRoot, { recursive: true, force: true });
   await fs.mkdir(path.join(outputRoot, 'assets'), { recursive: true });
+  await fs.copyFile(path.join(packageRoot, 'api-client.js'), path.join(outputRoot, 'api.js'));
+  await fs.copyFile(path.join(packageRoot, 'api-client.d.ts'), path.join(outputRoot, 'api.d.ts'));
 
   for (const folder of folders) {
     const slug = folder.name;
@@ -163,11 +172,42 @@ async function main() {
     if (hashes.has(processed.hash)) fail(slug, 'duplicate normalized image content; use a different image.');
     hashes.add(processed.hash);
 
+    const sourceMaxSquareSize = Math.min(processed.sourceDimensions.width, processed.sourceDimensions.height);
+    const availableSizes = variantSizes.filter((size) => size === 480 || size <= sourceMaxSquareSize);
+    const variants: Record<string, Record<string, unknown>> = {};
+    const variantsDir = path.join(outputRoot, 'assets', slug);
+    await fs.mkdir(variantsDir, { recursive: true });
     await fs.writeFile(path.join(outputRoot, 'assets', `${slug}.webp`), processed.buffer);
+
+    for (const size of availableSizes) {
+      const variant = size === 480
+        ? processed
+        : await processFoodImage(original, {
+            width: size,
+            height: size,
+            initialQuality: 78,
+            effort: 5,
+            focalPoint: metadata.focalPoint,
+          });
+      const variantPath = path.join(variantsDir, `${size}.webp`);
+      await fs.writeFile(variantPath, variant.buffer);
+      variants[String(size)] = {
+        url: size === 480
+          ? `https://cdn.jsdelivr.net/npm/acropin-food-images@${packageJson.version}/dist/assets/${slug}.webp`
+          : `https://cdn.jsdelivr.net/npm/acropin-food-images@${packageJson.version}/dist/assets/${slug}/${size}.webp`,
+        width: variant.width,
+        height: variant.height,
+        format: variant.format,
+        sha256: variant.hash,
+        byteSize: variant.byteSize,
+      };
+    }
+
     foodImages.push({
       id: `food-${slug}`,
       slug,
       dishName: metadata.dishName,
+      category: metadata.category,
       canonicalDishId: metadata.canonicalDishId,
       tags: metadata.tags,
       creator: metadata.creator,
@@ -175,7 +215,8 @@ async function main() {
       license: metadata.license,
       licenseEvidenceUrl: metadata.licenseEvidenceUrl,
       attribution: metadata.attribution,
-      url: `https://cdn.jsdelivr.net/npm/acropin-food-images@${packageJson.version}/dist/assets/${slug}.webp`,
+      url: String(variants['480'].url),
+      variants,
       sha256: processed.hash,
       width: processed.width,
       height: processed.height,
@@ -201,8 +242,9 @@ async function main() {
       `  const key = identifier.trim().toLowerCase();\n` +
       `  return foodImages.find((image) => image.slug === key || image.id === key || image.canonicalDishId === key);\n` +
       `}\n` +
-      `export function getFoodImageUrl(identifier) {\n` +
-      `  return getFoodImage(identifier)?.url;\n` +
+      `export function getFoodImageUrl(identifier, size = 480) {\n` +
+      `  const image = getFoodImage(identifier);\n` +
+      `  return image?.variants?.[size]?.url;\n` +
       `}\n` +
       `export function searchFoodImages(query = '', filters = {}) {\n` +
       `  const q = query.trim().toLowerCase();\n` +
@@ -211,22 +253,27 @@ async function main() {
       `    if (filters.tags?.some((tag) => !image.tags.includes(tag.toLowerCase()))) return false;\n` +
       `    return !q || [image.slug, image.dishName, ...image.tags].some((value) => value.toLowerCase().includes(q));\n` +
       `  });\n` +
-      `}\n`
+      `}\n` +
+      `export { createFoodImageClient, AcropinFoodImagesClient, FoodImageApiError } from './api.js';\n`
   );
   await fs.writeFile(
     path.join(outputRoot, 'index.d.ts'),
     `export type FoodImageLicense = 'CC0-1.0' | 'CC-BY-4.0';\n` +
+      `export type FoodImageSize = 480 | 960 | 1600;\n` +
+      `export interface FoodImageVariant { url: string; width: number; height: number; format: 'webp'; sha256: string; byteSize: number; }\n` +
       `export interface FoodImage {\n` +
-      `  id: string; slug: string; dishName: string; canonicalDishId?: string; tags: readonly string[];\n` +
+      `  id: string; slug: string; dishName: string; category: string; canonicalDishId?: string; tags: readonly string[];\n` +
       `  creator: string; sourceUrl: string; license: FoodImageLicense; licenseEvidenceUrl: string; attribution?: string;\n` +
-      `  url: string; sha256: string; width: 480; height: 480; format: 'webp'; byteSize: number; originalByteSize: number;\n` +
+      `  url: string; variants: Readonly<Partial<Record<FoodImageSize, Readonly<FoodImageVariant>>>>; sha256: string; width: 480; height: 480; format: 'webp'; byteSize: number; originalByteSize: number;\n` +
       `  focalPoint: Readonly<{ x: number; y: number }>;\n` +
       `}\n` +
       `export const foodImages: readonly FoodImage[];\n` +
       `export const packageVersion: string;\n` +
       `export function getFoodImage(identifier: string): FoodImage | undefined;\n` +
-      `export function getFoodImageUrl(identifier: string): string | undefined;\n` +
-      `export function searchFoodImages(query?: string, filters?: { tags?: string[]; license?: FoodImageLicense }): FoodImage[];\n`
+      `export function getFoodImageUrl(identifier: string, size?: FoodImageSize): string | undefined;\n` +
+      `export function searchFoodImages(query?: string, filters?: { tags?: string[]; license?: FoodImageLicense }): FoodImage[];\n` +
+      `export { createFoodImageClient, AcropinFoodImagesClient, FoodImageApiError } from './api.js';\n` +
+      `export type { ApiFoodImage, FoodImageApiSize, FoodImageApiVariant, FoodImageCatalogOptions, FoodImageCatalogResult, FoodImageClientOptions } from './api.js';\n`
   );
   console.log(`Built acropin-food-images ${packageJson.version}: ${foodImages.length} image(s).`);
 }

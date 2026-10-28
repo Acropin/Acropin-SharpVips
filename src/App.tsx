@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -29,7 +31,7 @@ import {
 } from 'lucide-react';
 import type { ImageAsset } from './lib/images/types';
 import { toUniversalFoodName } from './lib/images/universal-naming';
-import { apiFetch } from './lib/client/api';
+import { apiFetch, requestAdminAccess } from './lib/client/api';
 
 interface ProcessResponse {
   asset: ImageAsset;
@@ -82,6 +84,9 @@ const OPEN_SOURCE_SAMPLES = [
     dish: 'Paneer Butter Masala',
   },
 ];
+
+const API_ACCESS_CONTACT_URL = import.meta.env.VITE_API_ACCESS_CONTACT_URL
+  || 'mailto:manish.rathaur.dev@gmail.com?subject=Acropin%20Food%20Images%20API%20access';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'processor' | 'library'>('processor');
@@ -439,7 +444,7 @@ export default function App() {
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Centralized 480 × 480 WebP library with standardized universal naming
+                Food image library with 480, 960, and source-supported 1600 px WebP sizes
               </p>
             </div>
           </div>
@@ -479,6 +484,27 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-8">
+        <section className="mb-6 flex flex-col gap-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-sm font-bold text-white">Free API access for restaurant apps</h2>
+            <p className="mt-1 text-xs text-slate-400">Contact the owner to request an approved API key. Keys are issued individually with usage limits.</p>
+          </div>
+          <a
+            href={API_ACCESS_CONTACT_URL}
+            className="inline-flex shrink-0 items-center justify-center rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-slate-950 transition hover:bg-amber-400"
+          >
+            Request free API access
+          </a>
+          <button
+            type="button"
+            onClick={() => {
+              if (requestAdminAccess()) void fetchCatalog();
+            }}
+            className="inline-flex shrink-0 items-center justify-center rounded-xl border border-slate-700 px-4 py-2 text-xs font-bold text-slate-300 transition hover:border-slate-500 hover:text-white"
+          >
+            Owner dashboard
+          </button>
+        </section>
         {activeTab === 'processor' ? (
           <div className="space-y-8">
             {/* Primary Processing Card */}

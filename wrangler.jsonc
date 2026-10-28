@@ -1,0 +1,38 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "acropin-food-api",
+  "main": "cloudflare/worker.ts",
+  "compatibility_date": "2026-10-23",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "acropin-food-catalog",
+      "database_id": "REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID",
+      "migrations_dir": "cloudflare/migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FOOD_ASSETS",
+      "bucket_name": "acropin-food-assets"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "API_RATE_LIMITER",
+        "class_name": "ApiKeyRateLimiter"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["ApiKeyRateLimiter"]
+    }
+  ],
+  "vars": {
+    "ACCESS_CONTACT_URL": "mailto:manish.rathaur.dev@gmail.com?subject=Acropin%20Food%20Images%20API%20access"
+  }
+}

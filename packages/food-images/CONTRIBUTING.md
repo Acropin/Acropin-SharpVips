@@ -10,6 +10,7 @@
 
 - You created the image, or have written, image-specific permission to distribute it in this public package under the selected license.
 - The metadata names the creator or rightsholder and links to the source and evidence for that image.
+- Set `category` to a useful lowercase value such as `pizza`, `fruit`, `dessert`, or `beverages` so API clients can filter the catalog.
 - Choose `CC0-1.0` or `CC-BY-4.0`. For CC-BY, include attribution text that downstream users can display.
 - Do not rely on a site's general terms or a URL that merely displays an image. Do not submit Unsplash, Pexels, stock-photo, or scraped images without explicit rights to redistribute them in this catalog.
 

@@ -10,3 +10,5 @@ coverage/
 !.env.example
 .admin-api-token
 .vercel
+.wrangler/
+.dev.vars*
