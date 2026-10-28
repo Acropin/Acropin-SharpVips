@@ -2,13 +2,14 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "acropin-food-api",
   "main": "cloudflare/worker.ts",
+  "account_id": "277e9a5ff18c63bed6e324cf7aa313e5",
   "compatibility_date": "2026-10-23",
   "compatibility_flags": ["nodejs_compat"],
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "acropin-food-catalog",
-      "database_id": "REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID",
+      "database_id": "da1b2672-9f35-4b29-be84-f2d1df9e5fa3",
       "migrations_dir": "cloudflare/migrations"
     }
   ],
