@@ -15,6 +15,8 @@
 
 CI rejects invalid metadata, unsupported license identifiers, duplicate slugs, duplicate processed images, and files that cannot be safely normalized. Do not include generated WebP files or edit `dist/`.
 
+The repository maintains an explicit npm install-script allowlist in the root `package.json`: only the lockfile-pinned `esbuild` install script is approved because the TypeScript build tool requires its platform binary. Other discovered dependency scripts remain denied.
+
 After merge, Release Please prepares a versioned release pull request. Merging that release PR publishes the package through npm trusted publishing. The npm package must first be claimed and the repository/workflow configured as a trusted publisher by an npm package owner; see the repository's release setup notes.
 
 ## One-time maintainer release setup
@@ -28,7 +30,7 @@ After merge, Release Please prepares a versioned release pull request. Merging t
    ```
 
 2. In npmjs.com, open the `acropin-food-images` package settings and add a GitHub Actions trusted publisher for organization/user `Acropin`, repository `Acropin-SharpVips`, workflow filename `release-food-images.yml`, with direct `npm publish` allowed.
-3. Keep the workflow on a GitHub-hosted runner with its `id-token: write` permission. The first OIDC publish must succeed within 2 days after creating the trusted-publisher configuration. npm requires npm CLI 11.5.1+ and Node 22.14+ for trusted publishing; this workflow uses Node 24 and updates the npm CLI.
+3. Keep the workflow on a GitHub-hosted runner with its `id-token: write` permission. The first OIDC publish must succeed within 2 days after creating the trusted-publisher configuration. npm requires npm CLI 11.5.1+ and Node 22.14+ for trusted publishing; this workflow uses Node 24 and npm 12. npm 12 blocks dependency install scripts unless approved in the root `package.json` allowlist.
 4. Enable GitHub Actions to create pull requests and releases for the repository, then merge image contributions using Conventional Commit titles such as `feat(food-images): add margherita pizza`. Release Please opens the release PR; merging it triggers npm publication.
 
 If the package already exists, skip the initial publish and configure the trusted publisher. Do not publish a version that already exists in npm.

@@ -21,11 +21,11 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "acropin-food-images": "^0.1.0",
-    "@vercel/blob": "^2.3.0",
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.3.3",
+    "@vercel/blob": "^2.3.0",
     "@vitejs/plugin-react": "^6.1.1",
+    "acropin-food-images": "^0.1.0",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "lucide-react": "^0.546.0",
@@ -47,5 +47,10 @@
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
     "typescript": "^7.0.2"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "protobufjs": false,
+    "@google/genai": false
   }
 }
