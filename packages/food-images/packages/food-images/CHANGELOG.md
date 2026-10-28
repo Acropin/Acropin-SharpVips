@@ -1,0 +1,9 @@
+# Changelog
+
+## [0.2.0](https://github.com/Acropin/Acropin-SharpVips/compare/food-images-v0.1.0...food-images-v0.2.0) (2026-10-28)
+
+
+### Features
+
+* add controlled food image API ([c96fdc3](https://github.com/Acropin/Acropin-SharpVips/commit/c96fdc37c7b4e7d3497d0a62814f3a4b45b3c29e))
+* **food-images:** add community npm image library ([7635c0d](https://github.com/Acropin/Acropin-SharpVips/commit/7635c0d0d4f93592479df315f8496ab77b5eda11))
