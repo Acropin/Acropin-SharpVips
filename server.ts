@@ -48,10 +48,17 @@ const vercelRequestLimit = process.env.VERCEL === '1' ? '4mb' : '10mb';
 app.use(express.json({ limit: vercelRequestLimit }));
 app.use(express.urlencoded({ extended: true, limit: vercelRequestLimit }));
 
-// Mutating routes are admin-only in production. Public menu and catalog reads
-// remain available to the customer-facing view.
+// The legacy Vercel dashboard API is owner-only; restaurant apps use the
+// approved-key Cloudflare image API for catalog access.
 app.use('/api', (req, res, next) => {
-  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase())) {
+  const safeMethod = ['GET', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase());
+  const publicImageDelivery = ['GET', 'HEAD'].includes(req.method.toUpperCase())
+    && req.originalUrl.split('?')[0].startsWith('/api/images/food-assets/');
+
+  // Image files keep their immutable delivery URLs. Catalog and menu metadata
+  // are private to the owner here; restaurant apps use the approved-key
+  // Cloudflare API instead.
+  if (safeMethod && publicImageDelivery) {
     next();
     return;
   }
