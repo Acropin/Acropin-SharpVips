@@ -3,42 +3,55 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import fs from 'node:fs';
 import path from 'node:path';
-import { getStorageProvider } from '../storage/image-storage';
-import type { AssetApprovalStatus, ImageAsset } from '../images/types';
+import { foodImages } from 'acropin-food-images';
+import { getStorageProvider } from '../storage/image-storage.js';
+import { readPersistentJson, writePersistentJson } from '../storage/persistent-json.js';
+import type { AssetApprovalStatus, ImageAsset } from '../images/types.js';
 
 const CATALOG_DATA_FILE = path.resolve(process.cwd(), './storage/catalog.json');
 
 let assetCatalog: ImageAsset[] = [];
 let isInitialized = false;
+let initializePromise: Promise<void> | null = null;
+let pendingSave: Promise<void> = Promise.resolve();
 
-function ensureStorageDir() {
-  const dir = path.dirname(CATALOG_DATA_FILE);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
+function getPackageAssets(): ImageAsset[] {
+  const loadedAt = new Date().toISOString();
+  return foodImages.map((image) => ({
+    id: image.id,
+    canonicalDishId: image.canonicalDishId,
+    storageKey: `npm-package/${image.slug}`,
+    publicUrl: image.url,
+    sha256Hash: image.sha256,
+    width: image.width,
+    height: image.height,
+    format: 'webp',
+    byteSize: image.byteSize,
+    sourceUrl: image.sourceUrl,
+    sourceProvider: new URL(image.sourceUrl).hostname,
+    licenseType: image.license === 'CC0-1.0' ? 'CC0' : 'CC-BY-4.0',
+    licenseEvidence: image.licenseEvidenceUrl,
+    requiredAttribution: image.attribution,
+    processingVersion: 'v1',
+    processingQuality: 78,
+    focalPoint: { ...image.focalPoint },
+    approvalStatus: 'approved',
+    createdAt: loadedAt,
+    updatedAt: loadedAt,
+    tags: [...image.tags, 'npm-package'],
+    dishName: image.dishName,
+    universalName: image.slug,
+    filename: `${image.slug}.webp`,
+    originalByteSize: image.originalByteSize,
+  }));
 }
 
 function saveCatalogToFile() {
-  ensureStorageDir();
-  fs.writeFileSync(CATALOG_DATA_FILE, JSON.stringify(assetCatalog, null, 2), 'utf-8');
-}
-
-function loadCatalogFromFile() {
-  ensureStorageDir();
-  if (fs.existsSync(CATALOG_DATA_FILE)) {
-    try {
-      const raw = fs.readFileSync(CATALOG_DATA_FILE, 'utf-8');
-      const parsed = JSON.parse(raw);
-      // Filter out any legacy synthetic assets or test fixture items
-      assetCatalog = Array.isArray(parsed)
-        ? parsed.filter((a) => !a.tags?.includes('seed-catalog') && !a.tags?.includes('fixture'))
-        : [];
-    } catch {
-      assetCatalog = [];
-    }
-  }
+  const snapshot = assetCatalog.filter((asset) => !asset.tags?.includes('npm-package'));
+  pendingSave = pendingSave.catch(() => undefined).then(() =>
+    writePersistentJson('app-data/catalog.json', CATALOG_DATA_FILE, snapshot)
+  );
 }
 
 /**
@@ -47,8 +60,33 @@ function loadCatalogFromFile() {
  */
 export async function initializeCatalog(): Promise<void> {
   if (isInitialized) return;
-  loadCatalogFromFile();
-  isInitialized = true;
+  if (!initializePromise) {
+    initializePromise = (async () => {
+      try {
+        const parsed = await readPersistentJson<ImageAsset[]>('app-data/catalog.json', CATALOG_DATA_FILE);
+        // Filter out any legacy synthetic assets or test fixture items
+        const packageAssets = getPackageAssets();
+        const packageSlugs = new Set(packageAssets.map((asset) => asset.universalName));
+        const storedAssets = Array.isArray(parsed)
+          ? parsed.filter((a) => !a.tags?.includes('seed-catalog') && !a.tags?.includes('fixture') && !a.tags?.includes('npm-package'))
+          : [];
+        // A reviewed npm contribution takes precedence over an older app-managed
+        // image with the same universal dish name.
+        assetCatalog = [
+          ...storedAssets.filter((asset) => !packageSlugs.has(asset.universalName)),
+          ...packageAssets,
+        ];
+      } catch {
+        assetCatalog = [];
+      }
+      isInitialized = true;
+    })();
+  }
+  await initializePromise;
+}
+
+export async function flushCatalog(): Promise<void> {
+  await pendingSave;
 }
 
 export function getAllAssets(filter?: {
@@ -108,9 +146,11 @@ export async function deleteAsset(id: string): Promise<boolean> {
   initializeCatalog();
   const index = assetCatalog.findIndex((a) => a.id === id);
   if (index === -1) return false;
+  if (assetCatalog[index].tags?.includes('npm-package')) return false;
 
   const [removed] = assetCatalog.splice(index, 1);
   saveCatalogToFile();
+  await flushCatalog();
 
   if (removed?.storageKey) {
     try {
@@ -124,6 +164,11 @@ export async function deleteAsset(id: string): Promise<boolean> {
   return true;
 }
 
+export function isPackageAsset(id: string): boolean {
+  initializeCatalog();
+  return assetCatalog.some((asset) => asset.id === id && asset.tags?.includes('npm-package'));
+}
+
 export function updateAssetStatus(
   assetId: string,
   newStatus: AssetApprovalStatus,
@@ -131,7 +176,7 @@ export function updateAssetStatus(
 ): ImageAsset | undefined {
   initializeCatalog();
   const asset = assetCatalog.find((a) => a.id === assetId);
-  if (!asset) return undefined;
+  if (!asset || asset.tags?.includes('npm-package')) return undefined;
 
   asset.approvalStatus = newStatus;
   asset.updatedAt = new Date().toISOString();

@@ -5,17 +5,19 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { getAssetById } from './catalog-store';
+import { getAssetById } from './catalog-store.js';
+import { readPersistentJson, writePersistentJson } from '../storage/persistent-json.js';
 import type {
   MenuItem,
   MenuItemAssignment,
   RestaurantMenu,
-} from '../images/types';
+} from '../images/types.js';
 
 const RESTAURANTS_DATA_FILE = path.resolve(process.cwd(), './storage/restaurants.json');
 
 let restaurants: RestaurantMenu[] = [];
 let isInitialized = false;
+let pendingSave: Promise<void> = Promise.resolve();
 
 function ensureStorageDir() {
   const dir = path.dirname(RESTAURANTS_DATA_FILE);
@@ -25,8 +27,10 @@ function ensureStorageDir() {
 }
 
 function saveRestaurantsToFile() {
-  ensureStorageDir();
-  fs.writeFileSync(RESTAURANTS_DATA_FILE, JSON.stringify(restaurants, null, 2), 'utf-8');
+  const snapshot = [...restaurants];
+  pendingSave = pendingSave.catch(() => undefined).then(() =>
+    writePersistentJson('app-data/restaurants.json', RESTAURANTS_DATA_FILE, snapshot)
+  );
 }
 
 function loadRestaurantsFromFile() {
@@ -41,9 +45,21 @@ function loadRestaurantsFromFile() {
   }
 }
 
-export function initializeRestaurants(): void {
+export async function initializeRestaurants(): Promise<void> {
   if (isInitialized) return;
-  loadRestaurantsFromFile();
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    try {
+      const savedRestaurants = await readPersistentJson<RestaurantMenu[]>(
+        'app-data/restaurants.json',
+        RESTAURANTS_DATA_FILE
+      );
+      restaurants = Array.isArray(savedRestaurants) ? savedRestaurants : [];
+    } catch {
+      restaurants = [];
+    }
+  } else {
+    loadRestaurantsFromFile();
+  }
 
   if (restaurants.length === 0) {
     const now = new Date().toISOString();
@@ -362,6 +378,11 @@ export function initializeRestaurants(): void {
   }
 
   isInitialized = true;
+  await flushRestaurantStore();
+}
+
+export async function flushRestaurantStore(): Promise<void> {
+  await pendingSave;
 }
 
 export function getAllRestaurants(): Array<{

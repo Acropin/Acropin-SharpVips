@@ -1,14 +1,24 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { fileURLToPath } from 'node:url';
 import {defineConfig} from 'vite';
+
+const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), ...tailwindcss()],
+    // Vercel serves files from /public through its CDN. Keep the existing
+    // manifest and service worker while Vite writes the production app there.
+    publicDir: false as const,
+    build: {
+      outDir: path.resolve(projectRoot, 'public'),
+      emptyOutDir: false,
+    },
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': projectRoot,
       },
     },
     server: {

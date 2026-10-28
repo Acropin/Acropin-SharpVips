@@ -6,10 +6,11 @@
 import express from 'express';
 import multer from 'multer';
 import path from 'node:path';
+import { timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
-import { processFoodImage } from './src/lib/images/process-image';
-import { buildVersionedStorageKey, getStorageProvider } from './src/lib/storage/image-storage';
+import { processFoodImage } from './src/lib/images/process-image.js';
+import { getStorageProvider } from './src/lib/storage/image-storage.js';
 import {
   initializeCatalog,
   getAllAssets,
@@ -17,20 +18,23 @@ import {
   findAssetByHash,
   registerAsset,
   deleteAsset,
+  isPackageAsset,
   updateAssetStatus,
-} from './src/lib/server/catalog-store';
-import { toUniversalFoodName } from './src/lib/images/universal-naming';
+  flushCatalog,
+} from './src/lib/server/catalog-store.js';
+import { toUniversalFoodName } from './src/lib/images/universal-naming.js';
 import {
   initializeRestaurants,
   getAllRestaurants,
   getRestaurantMenu,
   updateMenuItemAssignment,
   handleAssetRevocation,
-} from './src/lib/server/restaurant-store';
-import { CANONICAL_DISHES } from './src/lib/catalog/canonical-dishes';
-import { matchCanonicalDish } from './src/lib/catalog/matcher';
-import { generateImportPreview, commitMenuImport } from './src/lib/import/menu-importer';
-import type { AssetApprovalStatus, ImageAsset, LicenseType } from './src/lib/images/types';
+  flushRestaurantStore,
+} from './src/lib/server/restaurant-store.js';
+import { CANONICAL_DISHES } from './src/lib/catalog/canonical-dishes.js';
+import { matchCanonicalDish } from './src/lib/catalog/matcher.js';
+import { generateImportPreview, commitMenuImport } from './src/lib/import/menu-importer.js';
+import type { AssetApprovalStatus, ImageAsset, LicenseType } from './src/lib/images/types.js';
 
 dotenv.config();
 
@@ -39,21 +43,53 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = parseInt(process.env.PORT || '3000', 10);
+const vercelRequestLimit = process.env.VERCEL === '1' ? '4mb' : '10mb';
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: vercelRequestLimit }));
+app.use(express.urlencoded({ extended: true, limit: vercelRequestLimit }));
+
+// Mutating routes are admin-only in production. Public menu and catalog reads
+// remain available to the customer-facing view.
+app.use('/api', (req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase())) {
+    next();
+    return;
+  }
+
+  const expected = process.env.ADMIN_API_TOKEN;
+  if (!expected && process.env.VERCEL === '1') {
+    res.status(503).json({ error: 'Admin actions are disabled until ADMIN_API_TOKEN is configured.' });
+    return;
+  }
+  if (!expected) {
+    next();
+    return;
+  }
+
+  const supplied = req.get('authorization')?.replace(/^Bearer\s+/i, '') || '';
+  const expectedBytes = Buffer.from(expected);
+  const suppliedBytes = Buffer.from(supplied);
+  const matches = expectedBytes.length === suppliedBytes.length && timingSafeEqual(expectedBytes, suppliedBytes);
+  if (!matches) {
+    res.status(401).json({ error: 'A valid admin access code is required.' });
+    return;
+  }
+  next();
+});
 
 // Configure Multer for memory storage upload handling
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 15 * 1024 * 1024, // 15MB
+    // Vercel Functions reject request bodies larger than 4.5 MB before the
+    // request reaches Express, so leave room for multipart overhead.
+    fileSize: process.env.VERCEL === '1' ? 3.5 * 1024 * 1024 : 15 * 1024 * 1024,
   },
 });
 
 // Initialize Stores
 await initializeCatalog();
-initializeRestaurants();
+await initializeRestaurants();
 
 // -------------------------------------------------------------
 // Image Serving Route with Immutable CDN Caching Headers
@@ -95,6 +131,10 @@ app.get('/api/images/catalog', (req, res) => {
 // Delete an asset from collection
 app.delete('/api/images/collection/:id', async (req, res) => {
   try {
+    if (isPackageAsset(req.params.id)) {
+      res.status(409).json({ error: 'This image is part of the published npm package. Remove it through a reviewed GitHub contribution pull request.' });
+      return;
+    }
     const success = await deleteAsset(req.params.id);
     if (!success) {
       res.status(404).json({ error: 'Asset not found in collection.' });
@@ -155,7 +195,7 @@ app.post('/api/images/upload', upload.single('image'), async (req, res) => {
       filename: universal.filename,
       dishName: universal.displayName,
       canonicalDishId: canonicalDishId || undefined,
-      storageKey,
+      storageKey: uploadResult.key,
       publicUrl: uploadResult.url,
       sha256Hash: processed.hash,
       width: processed.width,
@@ -177,6 +217,7 @@ app.post('/api/images/upload', upload.single('image'), async (req, res) => {
     };
 
     registerAsset(newAsset);
+    await flushCatalog();
     const match = matchCanonicalDish(universal.displayName);
 
     res.status(201).json({
@@ -300,7 +341,7 @@ app.post('/api/images/process-url', async (req, res) => {
       filename: universal.filename,
       dishName: universal.displayName,
       canonicalDishId: canonicalDishId || undefined,
-      storageKey,
+      storageKey: uploadResult.key,
       publicUrl: uploadResult.url,
       sha256Hash: processed.hash,
       width: processed.width,
@@ -323,6 +364,7 @@ app.post('/api/images/process-url', async (req, res) => {
     };
 
     registerAsset(newAsset);
+    await flushCatalog();
     const match = matchCanonicalDish(universal.displayName);
 
     res.status(201).json({
@@ -341,7 +383,7 @@ app.post('/api/images/process-url', async (req, res) => {
 });
 
 // Update asset approval status (e.g. approved, rejected, revoked)
-app.patch('/api/images/catalog/:id/status', (req, res) => {
+app.patch('/api/images/catalog/:id/status', async (req, res) => {
   const { id } = req.params;
   const { status, reason } = req.body;
 
@@ -359,7 +401,9 @@ app.patch('/api/images/catalog/:id/status', (req, res) => {
   let revocationReport;
   if (status === 'revoked') {
     revocationReport = handleAssetRevocation(id);
+    await flushRestaurantStore();
   }
+  await flushCatalog();
 
   res.json({
     asset: updated,
@@ -403,10 +447,11 @@ app.post('/api/restaurants/:id/import-preview', (req, res) => {
 });
 
 // Commit menu import transaction
-app.post('/api/restaurants/:id/import-commit', (req, res) => {
+app.post('/api/restaurants/:id/import-commit', async (req, res) => {
   try {
     const { previewItems, userOverrides, actor } = req.body;
     const result = commitMenuImport(req.params.id, previewItems, userOverrides || {}, actor);
+    await flushRestaurantStore();
     res.json(result);
   } catch (err: unknown) {
     res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
@@ -414,7 +459,7 @@ app.post('/api/restaurants/:id/import-commit', (req, res) => {
 });
 
 // Update single item image assignment manually
-app.patch('/api/restaurants/:id/assignments/:itemId', (req, res) => {
+app.patch('/api/restaurants/:id/assignments/:itemId', async (req, res) => {
   try {
     const { assetId, actor } = req.body;
     const item = updateMenuItemAssignment(req.params.id, req.params.itemId, assetId, actor);
@@ -422,6 +467,7 @@ app.patch('/api/restaurants/:id/assignments/:itemId', (req, res) => {
       res.status(404).json({ error: 'Menu item or restaurant not found.' });
       return;
     }
+    await flushRestaurantStore();
     res.json({ item });
   } catch (err: unknown) {
     res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
@@ -435,16 +481,17 @@ app.all('/api/*', (req, res) => {
 
 // Global API error handler
 app.use('/api', (err: any, _req: any, res: any, _next: any) => {
-  res.status(err.status || 500).json({ error: err.message || 'Internal API error' });
+  const status = err.status || err.statusCode || (err.code === 'LIMIT_FILE_SIZE' ? 413 : 500);
+  res.status(status).json({ error: err.message || 'Internal API error' });
 });
 
 // -------------------------------------------------------------
 // Vite Dev Server / Static File Serving
 // -------------------------------------------------------------
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.resolve(__dirname, 'dist')));
+  app.use(express.static(path.resolve(__dirname, 'public')));
   app.get('*', (_req, res) => {
-    res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+    res.sendFile(path.resolve(__dirname, 'public', 'index.html'));
   });
 } else {
   const { createServer: createViteServer } = await import('vite');
@@ -455,6 +502,10 @@ if (process.env.NODE_ENV === 'production') {
   app.use(vite.middlewares);
 }
 
-app.listen(port, '0.0.0.0', () => {
-  console.log(`🚀 Acropin Server listening on http://0.0.0.0:${port}`);
-});
+if (process.env.VERCEL !== '1') {
+  app.listen(port, '0.0.0.0', () => {
+    console.log(`🚀 Acropin Server listening on http://0.0.0.0:${port}`);
+  });
+}
+
+export default app;

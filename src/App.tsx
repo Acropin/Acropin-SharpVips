@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import type { ImageAsset } from './lib/images/types';
 import { toUniversalFoodName } from './lib/images/universal-naming';
+import { apiFetch } from './lib/client/api';
 
 interface ProcessResponse {
   asset: ImageAsset;
@@ -135,7 +136,7 @@ export default function App() {
   const fetchCatalog = useCallback(async () => {
     setIsLoadingCatalog(true);
     try {
-      const res = await fetch('/api/images/catalog');
+      const res = await apiFetch('/api/images/catalog');
       const data = await safeParseJson(res);
       if (Array.isArray(data.assets)) {
         setCatalog(data.assets);
@@ -334,7 +335,7 @@ export default function App() {
         formData.append('focalPointX', focalX.toString());
         formData.append('focalPointY', focalY.toString());
 
-        const res = await fetch('/api/images/upload', {
+        const res = await apiFetch('/api/images/upload', {
           method: 'POST',
           body: formData,
         });
@@ -345,7 +346,7 @@ export default function App() {
           throw new Error('Please enter a valid HTTP or HTTPS image URL.');
         }
 
-        const res = await fetch('/api/images/process-url', {
+        const res = await apiFetch('/api/images/process-url', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -372,7 +373,7 @@ export default function App() {
 
   const handleDeleteAsset = async (id: string) => {
     try {
-      const res = await fetch(`/api/images/collection/${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/images/collection/${id}`, { method: 'DELETE' });
       await safeParseJson(res);
       setCatalog((prev) => prev.filter((a) => a.id !== id));
       if (result?.asset.id === id) {

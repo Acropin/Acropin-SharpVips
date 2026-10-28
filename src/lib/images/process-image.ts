@@ -5,8 +5,8 @@
 
 import crypto from 'node:crypto';
 import sharp, { type Metadata } from 'sharp';
-import { ImageValidationError, ImageTooSmallError, ImageProcessingError } from './errors';
-import type { FocalPoint, ImageProcessingOptions, ProcessedImageResult } from './types';
+import { ImageValidationError, ImageTooSmallError, ImageProcessingError } from './errors.js';
+import type { FocalPoint, ImageProcessingOptions, ProcessedImageResult } from './types.js';
 
 // Limits & Safety Bounds
 export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024; // 15 MB

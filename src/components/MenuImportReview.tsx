@@ -21,6 +21,7 @@ import {
   Info
 } from 'lucide-react';
 import type { ImageAsset, ImportPreviewItem, ImportSummary } from '../lib/images/types';
+import { apiFetch } from '../lib/client/api';
 
 interface MenuImportReviewProps {
   currentRestaurantId: string;
@@ -153,7 +154,7 @@ export const MenuImportReview: React.FC<MenuImportReviewProps> = ({
   const [userOverrides, setUserOverrides] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
-    fetch('/api/images/catalog?status=approved')
+    apiFetch('/api/images/catalog?status=approved')
       .then((r) => r.json())
       .then((d) => setApprovedAssets(d.assets || []))
       .catch(console.error);
@@ -167,7 +168,7 @@ export const MenuImportReview: React.FC<MenuImportReviewProps> = ({
 
     try {
       const parsed = JSON.parse(jsonText);
-      const res = await fetch(`/api/restaurants/${currentRestaurantId}/import-preview`, {
+      const res = await apiFetch(`/api/restaurants/${currentRestaurantId}/import-preview`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ menuJson: parsed }),
@@ -190,7 +191,7 @@ export const MenuImportReview: React.FC<MenuImportReviewProps> = ({
     setError(null);
 
     try {
-      const res = await fetch(`/api/restaurants/${currentRestaurantId}/import-commit`, {
+      const res = await apiFetch(`/api/restaurants/${currentRestaurantId}/import-commit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { CANONICAL_DISHES } from './canonical-dishes';
-import type { CanonicalDish, DishDietary, MatchResult } from '../images/types';
+import { CANONICAL_DISHES } from './canonical-dishes.js';
+import type { CanonicalDish, DishDietary, MatchResult } from '../images/types.js';
 
 // Keywords indicating non-vegetarian content
 const NON_VEG_KEYWORDS = [

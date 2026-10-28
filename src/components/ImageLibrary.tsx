@@ -23,6 +23,7 @@ import {
   Ban
 } from 'lucide-react';
 import type { AssetApprovalStatus, ImageAsset, LicenseType, RestaurantMenu } from '../lib/images/types';
+import { apiFetch } from '../lib/client/api';
 
 interface ImageLibraryProps {
   currentRestaurantId: string;
@@ -71,7 +72,7 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({
 
   useEffect(() => {
     if (showAssignModal) {
-      fetch(`/api/restaurants/${currentRestaurantId}/menu`)
+      apiFetch(`/api/restaurants/${currentRestaurantId}/menu`)
         .then((r) => r.json())
         .then((d) => setRestaurantMenu(d.menu))
         .catch(console.error);
@@ -85,7 +86,7 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({
         selectedStatus === 'all'
           ? '/api/images/catalog'
           : `/api/images/catalog?status=${selectedStatus}`;
-      const res = await fetch(url);
+      const res = await apiFetch(url);
       const data = await res.json();
       setAssets(data.assets || []);
     } catch (err) {
@@ -97,7 +98,7 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({
 
   const handleStatusChange = async (assetId: string, newStatus: AssetApprovalStatus) => {
     try {
-      const res = await fetch(`/api/images/catalog/${assetId}/status`, {
+      const res = await apiFetch(`/api/images/catalog/${assetId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -162,7 +163,7 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({
     formData.append('autoApprove', autoApproveInput ? 'true' : 'false');
 
     try {
-      const res = await fetch('/api/images/upload', {
+      const res = await apiFetch('/api/images/upload', {
         method: 'POST',
         body: formData,
       });
@@ -200,7 +201,7 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({
 
     setIsAssigning(true);
     try {
-      const res = await fetch(`/api/restaurants/${currentRestaurantId}/assignments/${selectedMenuItemId}`, {
+      const res = await apiFetch(`/api/restaurants/${currentRestaurantId}/assignments/${selectedMenuItemId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

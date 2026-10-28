@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { matchCanonicalDish } from '../catalog/matcher';
+import { matchCanonicalDish } from '../catalog/matcher.js';
 
 // Stop-words to remove from universal filenames so they stay clean, short, and standard
 const STOP_WORDS = new Set([

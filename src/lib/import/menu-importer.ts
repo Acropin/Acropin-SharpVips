@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { matchCanonicalDish } from '../catalog/matcher';
-import { getAllAssets, getAssetById } from '../server/catalog-store';
-import { getRestaurantMenu, saveRestaurantMenu } from '../server/restaurant-store';
+import { matchCanonicalDish } from '../catalog/matcher.js';
+import { getAllAssets, getAssetById } from '../server/catalog-store.js';
+import { getRestaurantMenu, saveRestaurantMenu } from '../server/restaurant-store.js';
 import type {
   DishDietary,
   ImageAsset,
@@ -14,7 +14,7 @@ import type {
   MenuItem,
   MenuItemAssignment,
   RestaurantMenu,
-} from '../images/types';
+} from '../images/types.js';
 
 export interface RawMenuItemInput {
   id?: string;

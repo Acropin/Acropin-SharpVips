@@ -5,7 +5,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { StorageError } from '../images/errors';
+import { del, get, put } from '@vercel/blob';
+import { StorageError } from '../images/errors.js';
 
 export interface StorageUploadResult {
   key: string;
@@ -130,6 +131,80 @@ export class LocalStorageProvider implements IImageStorageProvider {
   }
 }
 
+/** Vercel Blob adapter for durable image uploads in serverless deployments. */
+export class VercelBlobStorageProvider implements IImageStorageProvider {
+  public name = 'vercel-blob';
+  private localFallback = new LocalStorageProvider();
+
+  public async upload(
+    key: string,
+    buffer: Buffer,
+    contentType = 'image/webp'
+  ): Promise<StorageUploadResult> {
+    try {
+      const blob = await put(key, buffer, {
+        access: 'private',
+        addRandomSuffix: true,
+        contentType,
+        cacheControlMaxAge: 31536000,
+      });
+      return {
+        key: blob.pathname,
+        url: this.getUrl(blob.pathname),
+        byteSize: buffer.length,
+        contentType,
+      };
+    } catch (err) {
+      throw new StorageError(`Failed to upload image to Vercel Blob: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  public async get(key: string): Promise<{ data: Buffer; contentType: string } | null> {
+    const blob = await get(key, { access: 'private', useCache: false });
+    if (!blob || blob.statusCode !== 200 || !blob.stream) {
+      return this.localFallback.get(key);
+    }
+
+    const chunks: Buffer[] = [];
+    for await (const chunk of blob.stream) {
+      chunks.push(Buffer.from(chunk));
+    }
+    return {
+      data: Buffer.concat(chunks),
+      contentType: blob.blob.contentType || 'application/octet-stream',
+    };
+  }
+
+  public async exists(key: string): Promise<boolean> {
+    return Boolean(await this.get(key));
+  }
+
+  public async delete(key: string): Promise<void> {
+    await del(key);
+  }
+
+  public getUrl(key: string): string {
+    return `/api/images/${key.split('/').map(encodeURIComponent).join('/')}`;
+  }
+}
+
+/** Allows bundled demo images to be read while preventing unsafe serverless writes. */
+class DeploymentReadOnlyStorageProvider extends LocalStorageProvider {
+  public override name = 'deployment-read-only';
+
+  public override async upload(
+    _key: string,
+    _buffer: Buffer,
+    _contentType = 'image/webp'
+  ): Promise<StorageUploadResult> {
+    throw new StorageError('Image storage is not configured. Connect a private Vercel Blob store to enable uploads.');
+  }
+
+  public override async delete(_key: string): Promise<void> {
+    throw new StorageError('Image storage is not configured. Connect a private Vercel Blob store to enable deletions.');
+  }
+}
+
 /**
  * Cloudflare R2 / S3-compatible Provider Interface:
  * When credentials are provided via environment variables, integrates with Cloudflare R2.
@@ -210,8 +285,12 @@ let storageInstance: IImageStorageProvider | null = null;
 
 export function getStorageProvider(): IImageStorageProvider {
   if (!storageInstance) {
-    if (process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID) {
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+      storageInstance = new VercelBlobStorageProvider();
+    } else if (process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID) {
       storageInstance = new S3R2StorageProvider();
+    } else if (process.env.VERCEL === '1') {
+      storageInstance = new DeploymentReadOnlyStorageProvider();
     } else {
       storageInstance = new LocalStorageProvider();
     }

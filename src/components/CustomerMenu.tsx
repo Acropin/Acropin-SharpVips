@@ -19,6 +19,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import type { DishDietary, MenuItem, RestaurantMenu } from '../lib/images/types';
+import { apiFetch } from '../lib/client/api';
 
 interface CustomerMenuProps {
   restaurantId: string;
@@ -58,7 +59,7 @@ export const CustomerMenu: React.FC<CustomerMenuProps> = ({
         }
       }
 
-      const res = await fetch(`/api/restaurants/${restaurantId}/menu`);
+      const res = await apiFetch(`/api/restaurants/${restaurantId}/menu`);
       if (!res.ok) throw new Error('Failed to load menu');
       const data = await res.json();
       setMenu(data.menu);
