@@ -1,6 +1,6 @@
 {
   "name": "acropin-food-images",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Open food image catalog for menus and food applications",
   "type": "module",
   "license": "Apache-2.0",
