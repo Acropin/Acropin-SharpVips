@@ -65,6 +65,16 @@ test('processFoodImage creates exact 480x480 WebP with hash and metadata', async
   assert.equal(meta.width, 480);
   assert.equal(meta.height, 480);
   assert.equal(meta.format, 'webp');
+
+  // Verify the 128x128 thumbnail buffer
+  assert.equal(result.thumbnailWidth, 128);
+  assert.equal(result.thumbnailHeight, 128);
+  assert.ok(result.thumbnailByteSize > 0);
+  assert.ok(result.thumbnailByteSize < result.byteSize);
+  const thumbMeta = await sharp(result.thumbnailBuffer).metadata();
+  assert.equal(thumbMeta.width, 128);
+  assert.equal(thumbMeta.height, 128);
+  assert.equal(thumbMeta.format, 'webp');
 });
 
 test('validateImageBuffer rejects undersized images that cannot produce quality 480x480', async () => {

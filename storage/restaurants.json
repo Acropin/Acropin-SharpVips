@@ -791,5 +791,1029 @@
         "resolvedImageUrl": "/api/images/food-assets/tiramisu/480.webp"
       }
     ]
+  },
+  {
+    "id": "menu_rest_test_1793256829761",
+    "restaurantId": "rest_test_1793256829761",
+    "restaurantName": "Test Bistro",
+    "tagline": "Test Bistro Tagline",
+    "cuisine": "Indian",
+    "categories": [
+      "Mains"
+    ],
+    "updatedAt": "2026-10-29T06:53:49.761Z",
+    "items": [
+      {
+        "id": "item_test_1",
+        "name": "Paneer Butter Masala",
+        "category": "Mains",
+        "price": 15,
+        "description": "Velvety cottage cheese",
+        "dietary": "veg",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_test_1",
+          "restaurantId": "rest_test_1793256829761",
+          "menuItemId": "item_test_1",
+          "imageAssetId": "asset_paneer_butter_masala_1",
+          "assignmentMethod": "automatic_exact",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T06:53:49.761Z",
+          "assignedBy": "system",
+          "isLocked": false,
+          "auditTrail": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "menu_rest_test_1793256904976",
+    "restaurantId": "rest_test_1793256904976",
+    "restaurantName": "Test Bistro",
+    "tagline": "Test Bistro Tagline",
+    "cuisine": "Indian",
+    "categories": [
+      "Mains"
+    ],
+    "updatedAt": "2026-10-29T06:55:04.985Z",
+    "items": [
+      {
+        "id": "item_test_1",
+        "name": "Paneer Butter Masala",
+        "category": "Mains",
+        "price": 16,
+        "description": "Updated description",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793256904985_ls30",
+          "restaurantId": "rest_test_1793256904976",
+          "menuItemId": "item_test_1",
+          "imageAssetId": "asset_paneer_butter_masala_1",
+          "assignmentMethod": "retained_previous",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T06:55:04.985Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-29T06:55:04.985Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_paneer_butter_masala_1",
+              "reason": "Import commit (preserved_existing)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793256904977_1",
+        "name": "Margherita Pizza",
+        "category": "Fusion Specials",
+        "price": 18,
+        "description": "Fresh basil and mozzarella",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793256904985_an1v",
+          "restaurantId": "rest_test_1793256904976",
+          "menuItemId": "item_1793256904977_1",
+          "imageAssetId": "asset_margherita_pizza_1",
+          "assignmentMethod": "automatic_exact",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T06:55:04.985Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-29T06:55:04.985Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_margherita_pizza_1",
+              "reason": "Import commit (new_assignment)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793256904978_2",
+        "name": "Unknown Dragon Stew",
+        "category": "Exotics",
+        "price": 25,
+        "description": "",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793256904985_inpt",
+          "restaurantId": "rest_test_1793256904976",
+          "menuItemId": "item_1793256904978_2",
+          "imageAssetId": "asset_tiramisu_1",
+          "assignmentMethod": "manual_owner",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T06:55:04.985Z",
+          "assignedBy": "owner_marcus",
+          "isLocked": true,
+          "isRevokedFallback": false,
+          "auditTrail": [
+            {
+              "action": "reassigned",
+              "timestamp": "2026-10-29T06:55:04.985Z",
+              "actor": "owner_marcus",
+              "newAssetId": "asset_tiramisu_1",
+              "reason": "Manual owner selection from Image Library"
+            }
+          ]
+        },
+        "resolvedImageUrl": "/api/images/food-assets/tiramisu/480.webp"
+      }
+    ]
+  },
+  {
+    "id": "menu_rest_test_1793256949735",
+    "restaurantId": "rest_test_1793256949735",
+    "restaurantName": "Test Bistro",
+    "tagline": "Test Bistro Tagline",
+    "cuisine": "Indian",
+    "categories": [
+      "Mains"
+    ],
+    "updatedAt": "2026-10-29T06:55:49.743Z",
+    "items": [
+      {
+        "id": "item_test_1",
+        "name": "Paneer Butter Masala",
+        "category": "Mains",
+        "price": 16,
+        "description": "Updated description",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793256949743_h5ah",
+          "restaurantId": "rest_test_1793256949735",
+          "menuItemId": "item_test_1",
+          "imageAssetId": "asset_paneer_butter_masala_1",
+          "assignmentMethod": "retained_previous",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T06:55:49.742Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-29T06:55:49.742Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_paneer_butter_masala_1",
+              "reason": "Import commit (preserved_existing)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793256949735_1",
+        "name": "Margherita Pizza",
+        "category": "Fusion Specials",
+        "price": 18,
+        "description": "Fresh basil and mozzarella",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793256949743_r0el",
+          "restaurantId": "rest_test_1793256949735",
+          "menuItemId": "item_1793256949735_1",
+          "imageAssetId": "asset_margherita_pizza_1",
+          "assignmentMethod": "automatic_exact",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T06:55:49.742Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-29T06:55:49.742Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_margherita_pizza_1",
+              "reason": "Import commit (new_assignment)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793256949736_2",
+        "name": "Unknown Dragon Stew",
+        "category": "Exotics",
+        "price": 25,
+        "description": "",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793256949743_qf3h",
+          "restaurantId": "rest_test_1793256949735",
+          "menuItemId": "item_1793256949736_2",
+          "imageAssetId": "asset_tiramisu_1",
+          "assignmentMethod": "manual_owner",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T06:55:49.743Z",
+          "assignedBy": "owner_marcus",
+          "isLocked": true,
+          "isRevokedFallback": false,
+          "auditTrail": [
+            {
+              "action": "reassigned",
+              "timestamp": "2026-10-29T06:55:49.743Z",
+              "actor": "owner_marcus",
+              "newAssetId": "asset_tiramisu_1",
+              "reason": "Manual owner selection from Image Library"
+            }
+          ]
+        },
+        "resolvedImageUrl": "/api/images/food-assets/tiramisu/480.webp"
+      }
+    ]
+  },
+  {
+    "id": "menu_rest_test_1793257002810",
+    "restaurantId": "rest_test_1793257002810",
+    "restaurantName": "Test Bistro",
+    "tagline": "Test Bistro Tagline",
+    "cuisine": "Indian",
+    "categories": [
+      "Mains"
+    ],
+    "updatedAt": "2026-10-29T06:56:42.825Z",
+    "items": [
+      {
+        "id": "item_test_1",
+        "name": "Paneer Butter Masala",
+        "category": "Mains",
+        "price": 16,
+        "description": "Updated description",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793257002824_hpp0",
+          "restaurantId": "rest_test_1793257002810",
+          "menuItemId": "item_test_1",
+          "imageAssetId": "asset_paneer_butter_masala_1",
+          "assignmentMethod": "retained_previous",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T06:56:42.824Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-29T06:56:42.824Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_paneer_butter_masala_1",
+              "reason": "Import commit (preserved_existing)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793257002812_1",
+        "name": "Margherita Pizza",
+        "category": "Fusion Specials",
+        "price": 18,
+        "description": "Fresh basil and mozzarella",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793257002824_aj33",
+          "restaurantId": "rest_test_1793257002810",
+          "menuItemId": "item_1793257002812_1",
+          "imageAssetId": "asset_margherita_pizza_1",
+          "assignmentMethod": "automatic_exact",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T06:56:42.824Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-29T06:56:42.824Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_margherita_pizza_1",
+              "reason": "Import commit (new_assignment)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793257002812_2",
+        "name": "Unknown Dragon Stew",
+        "category": "Exotics",
+        "price": 25,
+        "description": "",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793257002825_739h",
+          "restaurantId": "rest_test_1793257002810",
+          "menuItemId": "item_1793257002812_2",
+          "imageAssetId": "asset_tiramisu_1",
+          "assignmentMethod": "manual_owner",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T06:56:42.825Z",
+          "assignedBy": "owner_marcus",
+          "isLocked": true,
+          "isRevokedFallback": false,
+          "auditTrail": [
+            {
+              "action": "reassigned",
+              "timestamp": "2026-10-29T06:56:42.825Z",
+              "actor": "owner_marcus",
+              "newAssetId": "asset_tiramisu_1",
+              "reason": "Manual owner selection from Image Library"
+            }
+          ]
+        },
+        "resolvedImageUrl": "/api/images/food-assets/tiramisu/480.webp"
+      }
+    ]
+  },
+  {
+    "id": "menu_rest_test_1793257093526",
+    "restaurantId": "rest_test_1793257093526",
+    "restaurantName": "Test Bistro",
+    "tagline": "Test Bistro Tagline",
+    "cuisine": "Indian",
+    "categories": [
+      "Mains"
+    ],
+    "updatedAt": "2026-10-29T06:58:13.538Z",
+    "items": [
+      {
+        "id": "item_test_1",
+        "name": "Paneer Butter Masala",
+        "category": "Mains",
+        "price": 16,
+        "description": "Updated description",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793257093537_5o5s",
+          "restaurantId": "rest_test_1793257093526",
+          "menuItemId": "item_test_1",
+          "imageAssetId": "asset_paneer_butter_masala_1",
+          "assignmentMethod": "retained_previous",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T06:58:13.537Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-29T06:58:13.537Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_paneer_butter_masala_1",
+              "reason": "Import commit (preserved_existing)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793257093527_1",
+        "name": "Margherita Pizza",
+        "category": "Fusion Specials",
+        "price": 18,
+        "description": "Fresh basil and mozzarella",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793257093537_rt5h",
+          "restaurantId": "rest_test_1793257093526",
+          "menuItemId": "item_1793257093527_1",
+          "imageAssetId": "asset_margherita_pizza_1",
+          "assignmentMethod": "automatic_exact",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T06:58:13.537Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-29T06:58:13.537Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_margherita_pizza_1",
+              "reason": "Import commit (new_assignment)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793257093527_2",
+        "name": "Unknown Dragon Stew",
+        "category": "Exotics",
+        "price": 25,
+        "description": "",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793257093538_x26r",
+          "restaurantId": "rest_test_1793257093526",
+          "menuItemId": "item_1793257093527_2",
+          "imageAssetId": "asset_tiramisu_1",
+          "assignmentMethod": "manual_owner",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T06:58:13.538Z",
+          "assignedBy": "owner_marcus",
+          "isLocked": true,
+          "isRevokedFallback": false,
+          "auditTrail": [
+            {
+              "action": "reassigned",
+              "timestamp": "2026-10-29T06:58:13.538Z",
+              "actor": "owner_marcus",
+              "newAssetId": "asset_tiramisu_1",
+              "reason": "Manual owner selection from Image Library"
+            }
+          ]
+        },
+        "resolvedImageUrl": "/api/images/food-assets/tiramisu/480.webp"
+      }
+    ]
+  },
+  {
+    "id": "menu_rest_test_1793257109242",
+    "restaurantId": "rest_test_1793257109242",
+    "restaurantName": "Test Bistro",
+    "tagline": "Test Bistro Tagline",
+    "cuisine": "Indian",
+    "categories": [
+      "Mains"
+    ],
+    "updatedAt": "2026-10-29T06:58:29.277Z",
+    "items": [
+      {
+        "id": "item_test_1",
+        "name": "Paneer Butter Masala",
+        "category": "Mains",
+        "price": 16,
+        "description": "Updated description",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793257109277_cbwb",
+          "restaurantId": "rest_test_1793257109242",
+          "menuItemId": "item_test_1",
+          "imageAssetId": "asset_paneer_butter_masala_1",
+          "assignmentMethod": "retained_previous",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T06:58:29.277Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-29T06:58:29.277Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_paneer_butter_masala_1",
+              "reason": "Import commit (preserved_existing)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793257109244_1",
+        "name": "Margherita Pizza",
+        "category": "Fusion Specials",
+        "price": 18,
+        "description": "Fresh basil and mozzarella",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793257109277_7ltt",
+          "restaurantId": "rest_test_1793257109242",
+          "menuItemId": "item_1793257109244_1",
+          "imageAssetId": "asset_margherita_pizza_1",
+          "assignmentMethod": "automatic_exact",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T06:58:29.277Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-29T06:58:29.277Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_margherita_pizza_1",
+              "reason": "Import commit (new_assignment)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793257109244_2",
+        "name": "Unknown Dragon Stew",
+        "category": "Exotics",
+        "price": 25,
+        "description": "",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793257109277_im66",
+          "restaurantId": "rest_test_1793257109242",
+          "menuItemId": "item_1793257109244_2",
+          "imageAssetId": "asset_tiramisu_1",
+          "assignmentMethod": "manual_owner",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T06:58:29.277Z",
+          "assignedBy": "owner_marcus",
+          "isLocked": true,
+          "isRevokedFallback": false,
+          "auditTrail": [
+            {
+              "action": "reassigned",
+              "timestamp": "2026-10-29T06:58:29.277Z",
+              "actor": "owner_marcus",
+              "newAssetId": "asset_tiramisu_1",
+              "reason": "Manual owner selection from Image Library"
+            }
+          ]
+        },
+        "resolvedImageUrl": "/api/images/food-assets/tiramisu/480.webp"
+      }
+    ]
+  },
+  {
+    "id": "menu_rest_test_1793257351255",
+    "restaurantId": "rest_test_1793257351255",
+    "restaurantName": "Test Bistro",
+    "tagline": "Test Bistro Tagline",
+    "cuisine": "Indian",
+    "categories": [
+      "Mains"
+    ],
+    "updatedAt": "2026-10-29T07:02:31.270Z",
+    "items": [
+      {
+        "id": "item_test_1",
+        "name": "Paneer Butter Masala",
+        "category": "Mains",
+        "price": 16,
+        "description": "Updated description",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793257351270_9nog",
+          "restaurantId": "rest_test_1793257351255",
+          "menuItemId": "item_test_1",
+          "imageAssetId": "asset_paneer_butter_masala_1",
+          "assignmentMethod": "retained_previous",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T07:02:31.270Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-29T07:02:31.270Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_paneer_butter_masala_1",
+              "reason": "Import commit (preserved_existing)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793257351256_1",
+        "name": "Margherita Pizza",
+        "category": "Fusion Specials",
+        "price": 18,
+        "description": "Fresh basil and mozzarella",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793257351270_asr9",
+          "restaurantId": "rest_test_1793257351255",
+          "menuItemId": "item_1793257351256_1",
+          "imageAssetId": "asset_margherita_pizza_1",
+          "assignmentMethod": "automatic_exact",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T07:02:31.270Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-29T07:02:31.270Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_margherita_pizza_1",
+              "reason": "Import commit (new_assignment)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793257351257_2",
+        "name": "Unknown Dragon Stew",
+        "category": "Exotics",
+        "price": 25,
+        "description": "",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793257351270_jpqt",
+          "restaurantId": "rest_test_1793257351255",
+          "menuItemId": "item_1793257351257_2",
+          "imageAssetId": "asset_tiramisu_1",
+          "assignmentMethod": "manual_owner",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T07:02:31.270Z",
+          "assignedBy": "owner_marcus",
+          "isLocked": true,
+          "isRevokedFallback": false,
+          "auditTrail": [
+            {
+              "action": "reassigned",
+              "timestamp": "2026-10-29T07:02:31.270Z",
+              "actor": "owner_marcus",
+              "newAssetId": "asset_tiramisu_1",
+              "reason": "Manual owner selection from Image Library"
+            }
+          ]
+        },
+        "resolvedImageUrl": "/api/images/food-assets/tiramisu/480.webp"
+      }
+    ]
+  },
+  {
+    "id": "menu_rest_test_1793257525686",
+    "restaurantId": "rest_test_1793257525686",
+    "restaurantName": "Test Bistro",
+    "tagline": "Test Bistro Tagline",
+    "cuisine": "Indian",
+    "categories": [
+      "Mains"
+    ],
+    "updatedAt": "2026-10-29T07:05:25.699Z",
+    "items": [
+      {
+        "id": "item_test_1",
+        "name": "Paneer Butter Masala",
+        "category": "Mains",
+        "price": 16,
+        "description": "Updated description",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793257525698_di03",
+          "restaurantId": "rest_test_1793257525686",
+          "menuItemId": "item_test_1",
+          "imageAssetId": "asset_paneer_butter_masala_1",
+          "assignmentMethod": "retained_previous",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T07:05:25.698Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-29T07:05:25.698Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_paneer_butter_masala_1",
+              "reason": "Import commit (preserved_existing)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793257525687_1",
+        "name": "Margherita Pizza",
+        "category": "Fusion Specials",
+        "price": 18,
+        "description": "Fresh basil and mozzarella",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793257525698_fp8r",
+          "restaurantId": "rest_test_1793257525686",
+          "menuItemId": "item_1793257525687_1",
+          "imageAssetId": "asset_margherita_pizza_1",
+          "assignmentMethod": "automatic_exact",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T07:05:25.698Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-29T07:05:25.698Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_margherita_pizza_1",
+              "reason": "Import commit (new_assignment)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793257525687_2",
+        "name": "Unknown Dragon Stew",
+        "category": "Exotics",
+        "price": 25,
+        "description": "",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793257525699_bcji",
+          "restaurantId": "rest_test_1793257525686",
+          "menuItemId": "item_1793257525687_2",
+          "imageAssetId": "asset_tiramisu_1",
+          "assignmentMethod": "manual_owner",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T07:05:25.699Z",
+          "assignedBy": "owner_marcus",
+          "isLocked": true,
+          "isRevokedFallback": false,
+          "auditTrail": [
+            {
+              "action": "reassigned",
+              "timestamp": "2026-10-29T07:05:25.699Z",
+              "actor": "owner_marcus",
+              "newAssetId": "asset_tiramisu_1",
+              "reason": "Manual owner selection from Image Library"
+            }
+          ]
+        },
+        "resolvedImageUrl": "/api/images/food-assets/tiramisu/480.webp"
+      }
+    ]
+  },
+  {
+    "id": "menu_rest_test_1793257951107",
+    "restaurantId": "rest_test_1793257951107",
+    "restaurantName": "Test Bistro",
+    "tagline": "Test Bistro Tagline",
+    "cuisine": "Indian",
+    "categories": [
+      "Mains"
+    ],
+    "updatedAt": "2026-10-29T07:12:31.126Z",
+    "items": [
+      {
+        "id": "item_test_1",
+        "name": "Paneer Butter Masala",
+        "category": "Mains",
+        "price": 16,
+        "description": "Updated description",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793257951126_dk41",
+          "restaurantId": "rest_test_1793257951107",
+          "menuItemId": "item_test_1",
+          "imageAssetId": "asset_paneer_butter_masala_1",
+          "assignmentMethod": "retained_previous",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T07:12:31.125Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-29T07:12:31.125Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_paneer_butter_masala_1",
+              "reason": "Import commit (preserved_existing)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793257951108_1",
+        "name": "Margherita Pizza",
+        "category": "Fusion Specials",
+        "price": 18,
+        "description": "Fresh basil and mozzarella",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793257951126_s3e8",
+          "restaurantId": "rest_test_1793257951107",
+          "menuItemId": "item_1793257951108_1",
+          "imageAssetId": "asset_margherita_pizza_1",
+          "assignmentMethod": "automatic_exact",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T07:12:31.125Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-29T07:12:31.125Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_margherita_pizza_1",
+              "reason": "Import commit (new_assignment)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793257951109_2",
+        "name": "Unknown Dragon Stew",
+        "category": "Exotics",
+        "price": 25,
+        "description": "",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793257951126_cewh",
+          "restaurantId": "rest_test_1793257951107",
+          "menuItemId": "item_1793257951109_2",
+          "imageAssetId": "asset_tiramisu_1",
+          "assignmentMethod": "manual_owner",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T07:12:31.126Z",
+          "assignedBy": "owner_marcus",
+          "isLocked": true,
+          "isRevokedFallback": false,
+          "auditTrail": [
+            {
+              "action": "reassigned",
+              "timestamp": "2026-10-29T07:12:31.126Z",
+              "actor": "owner_marcus",
+              "newAssetId": "asset_tiramisu_1",
+              "reason": "Manual owner selection from Image Library"
+            }
+          ]
+        },
+        "resolvedImageUrl": "/api/images/food-assets/tiramisu/480.webp"
+      }
+    ]
+  },
+  {
+    "id": "menu_rest_test_1793258853655",
+    "restaurantId": "rest_test_1793258853655",
+    "restaurantName": "Test Bistro",
+    "tagline": "Test Bistro Tagline",
+    "cuisine": "Indian",
+    "categories": [
+      "Mains"
+    ],
+    "updatedAt": "2026-10-29T07:27:33.666Z",
+    "items": [
+      {
+        "id": "item_test_1",
+        "name": "Paneer Butter Masala",
+        "category": "Mains",
+        "price": 16,
+        "description": "Updated description",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793258853666_n4mi",
+          "restaurantId": "rest_test_1793258853655",
+          "menuItemId": "item_test_1",
+          "imageAssetId": "asset_paneer_butter_masala_1",
+          "assignmentMethod": "retained_previous",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T07:27:33.665Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-29T07:27:33.665Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_paneer_butter_masala_1",
+              "reason": "Import commit (preserved_existing)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793258853656_1",
+        "name": "Margherita Pizza",
+        "category": "Fusion Specials",
+        "price": 18,
+        "description": "Fresh basil and mozzarella",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793258853666_jeez",
+          "restaurantId": "rest_test_1793258853655",
+          "menuItemId": "item_1793258853656_1",
+          "imageAssetId": "asset_margherita_pizza_1",
+          "assignmentMethod": "automatic_exact",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T07:27:33.665Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-29T07:27:33.665Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_margherita_pizza_1",
+              "reason": "Import commit (new_assignment)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793258853656_2",
+        "name": "Unknown Dragon Stew",
+        "category": "Exotics",
+        "price": 25,
+        "description": "",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793258853666_spws",
+          "restaurantId": "rest_test_1793258853655",
+          "menuItemId": "item_1793258853656_2",
+          "imageAssetId": "asset_tiramisu_1",
+          "assignmentMethod": "manual_owner",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T07:27:33.666Z",
+          "assignedBy": "owner_marcus",
+          "isLocked": true,
+          "isRevokedFallback": false,
+          "auditTrail": [
+            {
+              "action": "reassigned",
+              "timestamp": "2026-10-29T07:27:33.666Z",
+              "actor": "owner_marcus",
+              "newAssetId": "asset_tiramisu_1",
+              "reason": "Manual owner selection from Image Library"
+            }
+          ]
+        },
+        "resolvedImageUrl": "/api/images/food-assets/tiramisu/480.webp"
+      }
+    ]
+  },
+  {
+    "id": "menu_rest_test_1793259836383",
+    "restaurantId": "rest_test_1793259836383",
+    "restaurantName": "Test Bistro",
+    "tagline": "Test Bistro Tagline",
+    "cuisine": "Indian",
+    "categories": [
+      "Mains"
+    ],
+    "updatedAt": "2026-10-29T07:43:56.397Z",
+    "items": [
+      {
+        "id": "item_test_1",
+        "name": "Paneer Butter Masala",
+        "category": "Mains",
+        "price": 16,
+        "description": "Updated description",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793259836397_v40b",
+          "restaurantId": "rest_test_1793259836383",
+          "menuItemId": "item_test_1",
+          "imageAssetId": "asset_paneer_butter_masala_1",
+          "assignmentMethod": "retained_previous",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T07:43:56.397Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-29T07:43:56.397Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_paneer_butter_masala_1",
+              "reason": "Import commit (preserved_existing)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793259836383_1",
+        "name": "Margherita Pizza",
+        "category": "Fusion Specials",
+        "price": 18,
+        "description": "Fresh basil and mozzarella",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793259836397_qrwj",
+          "restaurantId": "rest_test_1793259836383",
+          "menuItemId": "item_1793259836383_1",
+          "imageAssetId": "asset_margherita_pizza_1",
+          "assignmentMethod": "automatic_exact",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T07:43:56.397Z",
+          "assignedBy": "restaurant_owner",
+          "isLocked": false,
+          "auditTrail": [
+            {
+              "action": "assigned",
+              "timestamp": "2026-10-29T07:43:56.397Z",
+              "actor": "restaurant_owner",
+              "newAssetId": "asset_margherita_pizza_1",
+              "reason": "Import commit (new_assignment)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "item_1793259836384_2",
+        "name": "Unknown Dragon Stew",
+        "category": "Exotics",
+        "price": 25,
+        "description": "",
+        "isAvailable": true,
+        "imageAssignment": {
+          "id": "asgn_1793259836397_i7dl",
+          "restaurantId": "rest_test_1793259836383",
+          "menuItemId": "item_1793259836384_2",
+          "imageAssetId": "asset_tiramisu_1",
+          "assignmentMethod": "manual_owner",
+          "matchConfidence": 1,
+          "assignedAt": "2026-10-29T07:43:56.397Z",
+          "assignedBy": "owner_marcus",
+          "isLocked": true,
+          "isRevokedFallback": false,
+          "auditTrail": [
+            {
+              "action": "reassigned",
+              "timestamp": "2026-10-29T07:43:56.397Z",
+              "actor": "owner_marcus",
+              "newAssetId": "asset_tiramisu_1",
+              "reason": "Manual owner selection from Image Library"
+            }
+          ]
+        },
+        "resolvedImageUrl": "/api/images/food-assets/tiramisu/480.webp"
+      }
+    ]
   }
 ]

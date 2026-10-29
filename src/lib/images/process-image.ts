@@ -218,8 +218,65 @@ export async function processFoodImage(
     sizeWarning = `Output size (${(finalBuffer.length / 1024).toFixed(1)} KB) is below 15 KB target, visual quality verified.`;
   }
 
-  // Step 5: Compute SHA-256 hash
+  // Step 5: Compute SHA-256 hash for primary 480x480
   const sha256Hash = crypto.createHash('sha256').update(finalBuffer).digest('hex');
+
+  // Step 6: Generate ultra-compact 128x128 thumbnail without losing visual crispness
+  const thumbnailWidth = 128;
+  const thumbnailHeight = 128;
+  let thumbnailBuffer: Buffer;
+  try {
+    thumbnailBuffer = await sharp(baseProcessedBuffer)
+      .resize(thumbnailWidth, thumbnailHeight, {
+        fit: 'fill',
+        kernel: sharp.kernel.lanczos3,
+      })
+      .webp({
+        quality: 82,
+        effort: 6,
+        smartSubsample: true,
+      })
+      .toBuffer();
+  } catch (err) {
+    throw new ImageProcessingError(
+      `Thumbnail 128x128 generation failed: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+
+  const thumbnailHash = crypto.createHash('sha256').update(thumbnailBuffer).digest('hex');
+
+  // Step 7: Generate 960x960 Retina / 2x variant
+  let retinaBuffer: Buffer | undefined;
+  let retinaByteSize: number | undefined;
+  try {
+    retinaBuffer = await sharp(inputBuffer)
+      .rotate()
+      .extract({ left: crop.left, top: crop.top, width: crop.size, height: crop.size })
+      .resize(960, 960, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
+      .toColorspace('srgb')
+      .webp({ quality: 80, effort: 5, smartSubsample: true })
+      .toBuffer();
+    retinaByteSize = retinaBuffer.length;
+  } catch {
+    // If extraction/resize fails, retina remains undefined
+  }
+
+  // Step 8: Generate 1600x1600 Full High-Res display variant
+  let hiResBuffer: Buffer | undefined;
+  let hiResByteSize: number | undefined;
+  const hiResTarget = Math.max(960, Math.min(crop.size, 1600));
+  try {
+    hiResBuffer = await sharp(inputBuffer)
+      .rotate()
+      .extract({ left: crop.left, top: crop.top, width: crop.size, height: crop.size })
+      .resize(hiResTarget, hiResTarget, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
+      .toColorspace('srgb')
+      .webp({ quality: 82, effort: 5, smartSubsample: true })
+      .toBuffer();
+    hiResByteSize = hiResBuffer.length;
+  } catch {
+    // Fallback if source resolution bounds prevent 1600px
+  }
 
   return {
     buffer: finalBuffer,
@@ -232,5 +289,18 @@ export async function processFoodImage(
     qualityUsed: finalQuality,
     sizeDeviationWarning: sizeWarning,
     sourceDimensions: { width: validated.width, height: validated.height },
+    thumbnailBuffer,
+    thumbnailWidth,
+    thumbnailHeight,
+    thumbnailByteSize: thumbnailBuffer.length,
+    thumbnailHash,
+    retinaBuffer,
+    retinaWidth: 960,
+    retinaHeight: 960,
+    retinaByteSize,
+    hiResBuffer,
+    hiResWidth: hiResTarget,
+    hiResHeight: hiResTarget,
+    hiResByteSize,
   };
 }

@@ -26,910 +26,730 @@ import {
   FolderHeart,
   Info,
   ArrowRight,
-  HardDrive,
-  Database
+  Database,
+  ShieldCheck,
+  ShieldAlert,
+  GitCommit,
+  User,
+  Table as TableIcon,
+  Clock,
+  Eye,
+  FileSpreadsheet,
 } from 'lucide-react';
-import type { ImageAsset } from './lib/images/types';
+import type { ImageAsset, MlInspectionResult } from './lib/images/types';
+import type { InventoryTableRow } from './lib/server/dataset-target-store';
 import { toUniversalFoodName } from './lib/images/universal-naming';
-import { apiFetch, requestAdminAccess } from './lib/client/api';
+import { apiFetch } from './lib/client/api';
+import { InventoryExcelTable } from './components/InventoryExcelTable';
+import { ReviewQueueView } from './components/ReviewQueueView';
+import { MetadataInspectorModal } from './components/MetadataInspectorModal';
+import { VariantPreviewModal } from './components/VariantPreviewModal';
 
 interface ProcessResponse {
   asset: ImageAsset;
-  canonicalMatch?: {
-    matchType: string;
-    confidence: number;
-    canonicalDish?: {
-      canonicalName: string;
-      cuisine: string;
-      category: string;
-      dietary: string;
-    };
-    reason: string;
-  } | null;
   warning?: string;
   sourceDimensions?: { width: number; height: number };
   compressionRatio?: string;
+  mlInspection?: MlInspectionResult;
 }
 
-// Preset open-source food image samples for instant 1-click testing
-const OPEN_SOURCE_SAMPLES = [
-  {
-    title: 'Margherita Pizza',
-    source: 'Unsplash / Open',
-    url: 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=1000&auto=format&fit=crop&q=80',
-    dish: 'Margherita Pizza',
-  },
-  {
-    title: 'Cheeseburger',
-    source: 'Unsplash / Open',
-    url: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=1000&auto=format&fit=crop&q=80',
-    dish: 'Classic Cheeseburger',
-  },
-  {
-    title: 'Tonkotsu Ramen',
-    source: 'Unsplash / Open',
-    url: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=1000&auto=format&fit=crop&q=80',
-    dish: 'Tonkotsu Ramen',
-  },
-  {
-    title: 'Tiramisu',
-    source: 'Unsplash / Open',
-    url: 'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?w=1000&auto=format&fit=crop&q=80',
-    dish: 'Classic Tiramisu',
-  },
-  {
-    title: 'Paneer Butter Masala',
-    source: 'Wikimedia / Open',
-    url: 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?w=1000&auto=format&fit=crop&q=80',
-    dish: 'Paneer Butter Masala',
-  },
-];
-
-const API_ACCESS_CONTACT_URL = import.meta.env.VITE_API_ACCESS_CONTACT_URL
-  || 'mailto:manish.rathaur.dev@gmail.com?subject=Acropin%20Food%20Images%20API%20access';
+interface DatasetResponse {
+  totalTargetDishes: number;
+  completedCount: number;
+  missingCount: number;
+  pendingCount: number;
+  coveragePercent: number;
+  rows: InventoryTableRow[];
+}
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'processor' | 'library'>('processor');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'processor' | 'queue' | 'assets'>('inventory');
   const [inputMode, setInputMode] = useState<'upload' | 'url'>('upload');
-  
+
   // File & URL state
   const [file, setFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string>('');
-  
-  // Naming state (standardized single universal name)
+
+  // Naming state (universal food slug)
   const [dishTitle, setDishTitle] = useState<string>('');
   const [universalSlug, setUniversalSlug] = useState<string>('');
   const [isSlugManuallyEdited, setIsSlugManuallyEdited] = useState<boolean>(false);
 
-  // Drag-and-drop state
-  const [isWindowDragging, setIsWindowDragging] = useState<boolean>(false);
-  const [isDropZoneOver, setIsDropZoneOver] = useState<boolean>(false);
-  const dragCounter = useRef(0);
+  // Contributor DCO & GitHub Sign-Off State
+  const [contributorGitHub, setContributorGitHub] = useState<string>(() => {
+    return localStorage.getItem('acropin_contributor_github') || 'acropin-contributor';
+  });
+  const [contributorDcoEmail, setContributorDcoEmail] = useState<string>(() => {
+    return localStorage.getItem('acropin_contributor_email') || 'contributor@acropin.org';
+  });
+  const [submitDirect, setSubmitDirect] = useState<boolean>(false);
+
+  // ML Pre-check state
+  const [mlPreCheck, setMlPreCheck] = useState<MlInspectionResult | null>(null);
+  const [isMlChecking, setIsMlChecking] = useState<boolean>(false);
 
   // Focal point
   const [focalX, setFocalX] = useState<number>(0.5);
   const [focalY, setFocalY] = useState<number>(0.5);
-  const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
 
   // Processing state
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [result, setResult] = useState<ProcessResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [lastResult, setLastResult] = useState<ProcessResponse | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Library / Collection state
+  // Inventory Table state
+  const [datasetData, setDatasetData] = useState<DatasetResponse | null>(null);
+  const [isLoadingDataset, setIsLoadingDataset] = useState<boolean>(false);
+
+  // Review Queue state
+  const [pendingAssets, setPendingAssets] = useState<ImageAsset[]>([]);
+  const [isLoadingQueue, setIsLoadingQueue] = useState<boolean>(false);
+
+  // Catalog Assets
   const [catalog, setCatalog] = useState<ImageAsset[]>([]);
-  const [librarySearch, setLibrarySearch] = useState<string>('');
-  const [isLoadingCatalog, setIsLoadingCatalog] = useState<boolean>(false);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [assetSearch, setAssetSearch] = useState<string>('');
 
-  // Auto-compute universal slug whenever dishTitle or file/URL changes (unless user manually typed custom slug)
-  const deriveDefaultUniversalName = useCallback((raw: string) => {
-    const derived = toUniversalFoodName(raw);
-    return derived.universalName;
-  }, []);
+  // Modals state
+  const [inspectingAsset, setInspectingAsset] = useState<ImageAsset | null>(null);
+  const [viewingVariantsAsset, setViewingVariantsAsset] = useState<ImageAsset | null>(null);
 
-  const handleApplyRawName = useCallback((name: string) => {
-    setDishTitle(name);
-    if (!isSlugManuallyEdited) {
-      setUniversalSlug(deriveDefaultUniversalName(name));
-    }
-  }, [deriveDefaultUniversalName, isSlugManuallyEdited]);
+  // Drag and drop
+  const [isDragOver, setIsDragOver] = useState(false);
 
-  // Load catalog library from backend
-  const fetchCatalog = useCallback(async () => {
-    setIsLoadingCatalog(true);
+  // Save contributor settings to localStorage
+  useEffect(() => {
+    if (contributorGitHub) localStorage.setItem('acropin_contributor_github', contributorGitHub);
+    if (contributorDcoEmail) localStorage.setItem('acropin_contributor_email', contributorDcoEmail);
+  }, [contributorGitHub, contributorDcoEmail]);
+
+  // Load Inventory Dataset
+  const fetchDataset = useCallback(async () => {
+    setIsLoadingDataset(true);
     try {
-      const res = await apiFetch('/api/images/catalog');
-      const data = await safeParseJson(res);
-      if (Array.isArray(data.assets)) {
-        setCatalog(data.assets);
+      const res = await apiFetch('/api/dataset/targets');
+      if (res.ok) {
+        const data = await res.json();
+        setDatasetData(data);
       }
     } catch (err) {
-      console.error('Failed to load image library catalog:', err);
+      console.error('Failed to load dataset targets:', err);
     } finally {
-      setIsLoadingCatalog(false);
+      setIsLoadingDataset(false);
+    }
+  }, []);
+
+  // Load Review Queue
+  const fetchReviewQueue = useCallback(async () => {
+    setIsLoadingQueue(true);
+    try {
+      const res = await apiFetch('/api/images/review-queue');
+      if (res.ok) {
+        const data = await res.json();
+        setPendingAssets(data.pending || []);
+      }
+    } catch (err) {
+      console.error('Failed to load review queue:', err);
+    } finally {
+      setIsLoadingQueue(false);
+    }
+  }, []);
+
+  // Load Approved Catalog
+  const fetchCatalog = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/images/catalog?status=approved');
+      if (res.ok) {
+        const data = await res.json();
+        setCatalog(data.assets || []);
+      }
+    } catch (err) {
+      console.error('Failed to load catalog:', err);
     }
   }, []);
 
   useEffect(() => {
+    fetchDataset();
+    fetchReviewQueue();
     fetchCatalog();
-  }, [fetchCatalog]);
+  }, [fetchDataset, fetchReviewQueue, fetchCatalog]);
 
-  // Cleanup old service workers & caches
-  useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then((registrations) => {
-        for (const reg of registrations) reg.unregister();
-      });
-    }
-    if ('caches' in window) {
-      caches.keys().then((names) => {
-        for (const name of names) caches.delete(name);
-      });
-    }
-  }, []);
-
-  // Window drag-and-drop listener
-  useEffect(() => {
-    const handleDragEnter = (e: DragEvent) => {
-      e.preventDefault();
-      dragCounter.current += 1;
-      if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
-        setIsWindowDragging(true);
-      }
-    };
-
-    const handleDragLeave = (e: DragEvent) => {
-      e.preventDefault();
-      dragCounter.current -= 1;
-      if (dragCounter.current <= 0) {
-        setIsWindowDragging(false);
-        dragCounter.current = 0;
-      }
-    };
-
-    const handleDragOver = (e: DragEvent) => {
-      e.preventDefault();
-      if (e.dataTransfer) {
-        e.dataTransfer.dropEffect = 'copy';
-      }
-    };
-
-    const handleDrop = (e: DragEvent) => {
-      e.preventDefault();
-      dragCounter.current = 0;
-      setIsWindowDragging(false);
-      setIsDropZoneOver(false);
-
-      if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-        const droppedFile = e.dataTransfer.files[0];
-        if (droppedFile.type.startsWith('image/')) {
-          setInputMode('upload');
-          setActiveTab('processor');
-          handleSelectFile(droppedFile);
-        } else {
-          setError('Please drop a valid image file (JPEG, PNG, WebP).');
-        }
-      }
-    };
-
-    // Global Clipboard Paste listener
-    const handlePaste = (e: ClipboardEvent) => {
-      if (!e.clipboardData) return;
-
-      // 1. Check for image files in clipboard
-      const items = e.clipboardData.items;
-      for (let i = 0; i < items.length; i++) {
-        if (items[i].type.startsWith('image/')) {
-          const blob = items[i].getAsFile();
-          if (blob) {
-            setInputMode('upload');
-            setActiveTab('processor');
-            handleSelectFile(blob);
-            setError(null);
-            return;
-          }
-        }
-      }
-
-      // 2. Check for URL in clipboard text if focused outside input
-      const text = e.clipboardData.getData('text').trim();
-      if (text.startsWith('http://') || text.startsWith('https://')) {
-        // If image URL
-        if (/\.(jpeg|jpg|png|webp|avif)/i.test(text) || text.includes('images.unsplash.com') || text.includes('upload.wikimedia.org')) {
-          setInputMode('url');
-          setActiveTab('processor');
-          setImageUrl(text);
-          setError(null);
-          let extracted = 'Food Dish';
-          try {
-            const urlPath = new URL(text).pathname.split('/').pop() || '';
-            extracted = urlPath.replace(/[-_]/g, ' ').replace(/\.[^/.]+$/, '');
-          } catch {
-            // ignore
-          }
-          handleApplyRawName(extracted);
-        }
-      }
-    };
-
-    window.addEventListener('dragenter', handleDragEnter);
-    window.addEventListener('dragleave', handleDragLeave);
-    window.addEventListener('dragover', handleDragOver);
-    window.addEventListener('drop', handleDrop);
-    window.addEventListener('paste', handlePaste);
-
-    return () => {
-      window.removeEventListener('dragenter', handleDragEnter);
-      window.removeEventListener('dragleave', handleDragLeave);
-      window.removeEventListener('dragover', handleDragOver);
-      window.removeEventListener('drop', handleDrop);
-      window.removeEventListener('paste', handlePaste);
-    };
-  }, [handleApplyRawName]);
-
-  const handleSelectFile = (selectedFile: File) => {
-    setFile(selectedFile);
-    setFilePreview(URL.createObjectURL(selectedFile));
-    setError(null);
-
-    const cleanRawName = selectedFile.name
-      .replace(/\.[^/.]+$/, '')
-      .replace(/[-_]/g, ' ')
-      .replace(/\b\w/g, (l) => l.toUpperCase());
-
-    handleApplyRawName(cleanRawName);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      handleSelectFile(e.target.files[0]);
+  // Auto-generate universal slug on dishTitle change
+  const handleDishTitleChange = (val: string) => {
+    setDishTitle(val);
+    if (!isSlugManuallyEdited) {
+      setUniversalSlug(toUniversalFoodName(val).universalName);
     }
   };
 
-  const handleFocalClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
-    setFocalX(Number(x.toFixed(2)));
-    setFocalY(Number(y.toFixed(2)));
+  // Pre-load a dish from the Excel table into the processor
+  const handleSelectForContribution = (row: InventoryTableRow) => {
+    setDishTitle(row.name);
+    setUniversalSlug(row.universalSlug);
+    setIsSlugManuallyEdited(true);
+    setLastResult(null);
+    setErrorMessage(null);
+    setActiveTab('processor');
   };
 
-  const safeParseJson = async (res: Response) => {
-    const text = await res.text();
-    let json: any;
-    try {
-      json = JSON.parse(text);
-    } catch {
-      if (text.trim().startsWith('<')) {
-        throw new Error(
-          `Server returned an HTML error page (${res.status} ${res.statusText}). Please check that the server is running.`
-        );
-      }
-      throw new Error(`Invalid server response (${res.status}): ${text.slice(0, 100)}`);
-    }
-
-    if (!res.ok) {
-      throw new Error(json.error || `Server error (${res.status})`);
-    }
-    return json;
-  };
-
-  const handleProcess = async (e: React.FormEvent) => {
+  // Drag and drop handling
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    setError(null);
-    setIsProcessing(true);
+    setIsDragOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const selected = e.dataTransfer.files[0];
+      setFile(selected);
+      setFilePreview(URL.createObjectURL(selected));
+      setInputMode('upload');
+      if (!dishTitle) {
+        const rawName = selected.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+        handleDishTitleChange(rawName);
+      }
+    }
+  };
 
-    // Compute final universal name to assign
-    const chosenUniversalName = (universalSlug || deriveDefaultUniversalName(dishTitle || 'food-dish'))
-      .toLowerCase()
-      .replace(/[^a-z0-9-]/g, '-')
-      .replace(/^-+|-+$/g, '');
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const selected = e.target.files[0];
+      setFile(selected);
+      setFilePreview(URL.createObjectURL(selected));
+      if (!dishTitle) {
+        const rawName = selected.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+        handleDishTitleChange(rawName);
+      }
+    }
+  };
+
+  // Pre-check ML when an image is ready
+  const runPreCheck = async () => {
+    if (!file && !imageUrl) return;
+    setIsMlChecking(true);
+    try {
+      const formData = new FormData();
+      if (file) formData.append('image', file);
+      if (imageUrl) formData.append('imageUrl', imageUrl);
+      formData.append('dishName', dishTitle || 'Food Item');
+      formData.append('universalSlug', universalSlug);
+
+      const res = await apiFetch('/api/ml/inspect', {
+        method: 'POST',
+        body: formData,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMlPreCheck(data.mlInspection);
+      }
+    } catch {
+      // Non-blocking pre-check
+    } finally {
+      setIsMlChecking(false);
+    }
+  };
+
+  // Process & Submit Image
+  const handleProcessAndSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (inputMode === 'upload' && !file) {
+      setErrorMessage('Please drop or select an image file.');
+      return;
+    }
+    if (inputMode === 'url' && !imageUrl.trim()) {
+      setErrorMessage('Please enter an image URL.');
+      return;
+    }
+    if (!dishTitle.trim()) {
+      setErrorMessage('Please provide the food dish name.');
+      return;
+    }
+
+    setIsProcessing(true);
+    setErrorMessage(null);
+    setLastResult(null);
 
     try {
-      let data: ProcessResponse;
-
-      if (inputMode === 'upload') {
-        if (!file) throw new Error('Please select or drop an image file.');
+      let res: Response;
+      if (inputMode === 'upload' && file) {
         const formData = new FormData();
         formData.append('image', file);
-        formData.append('dishName', dishTitle || chosenUniversalName);
-        formData.append('universalName', chosenUniversalName);
-        formData.append('focalPointX', focalX.toString());
-        formData.append('focalPointY', focalY.toString());
+        formData.append('dishName', dishTitle);
+        formData.append('universalName', universalSlug);
+        formData.append('focalPointX', String(focalX));
+        formData.append('focalPointY', String(focalY));
+        formData.append('contributorGitHub', contributorGitHub);
+        formData.append('contributorDcoEmail', contributorDcoEmail);
+        formData.append('submitDirect', String(submitDirect));
+        formData.append('licenseType', 'CC0');
 
-        const res = await apiFetch('/api/images/upload', {
+        res = await apiFetch('/api/images/upload', {
           method: 'POST',
           body: formData,
         });
-
-        data = await safeParseJson(res);
       } else {
-        if (!imageUrl || !imageUrl.startsWith('http')) {
-          throw new Error('Please enter a valid HTTP or HTTPS image URL.');
-        }
-
-        const res = await apiFetch('/api/images/process-url', {
+        res = await apiFetch('/api/images/process-url', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             imageUrl,
-            dishName: dishTitle || chosenUniversalName,
-            universalName: chosenUniversalName,
+            dishName: dishTitle,
+            universalName: universalSlug,
             focalPointX: focalX,
             focalPointY: focalY,
+            contributorGitHub,
+            contributorDcoEmail,
+            submitDirect,
+            licenseType: 'CC0',
           }),
         });
-
-        data = await safeParseJson(res);
       }
 
-      setResult(data);
-      // Immediately refresh collection library
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to process image');
+      }
+
+      setLastResult(data);
+      // Refresh inventory and queue
+      fetchDataset();
+      fetchReviewQueue();
       fetchCatalog();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'An error occurred during processing.');
+      setErrorMessage(err instanceof Error ? err.message : String(err));
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const handleDeleteAsset = async (id: string) => {
+  // Handle Review Decision
+  const handleReviewDecision = async (id: string, decision: 'approve' | 'reject', reason?: string) => {
     try {
-      const res = await apiFetch(`/api/images/collection/${id}`, { method: 'DELETE' });
-      await safeParseJson(res);
-      setCatalog((prev) => prev.filter((a) => a.id !== id));
-      if (result?.asset.id === id) {
-        setResult(null);
+      const res = await apiFetch(`/api/images/review-queue/${id}/decision`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision, rejectionReason: reason }),
+      });
+      if (res.ok) {
+        fetchDataset();
+        fetchReviewQueue();
+        fetchCatalog();
       }
-      setDeleteConfirmId(null);
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to delete asset.');
+    } catch (err) {
+      console.error('Failed to record review decision:', err);
     }
   };
 
-  const copyToClipboard = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+  // Delete Target Dish
+  const handleDeleteTarget = async (id: string) => {
+    if (!confirm('Are you sure you want to remove this dish target from the inventory?')) return;
+    try {
+      const res = await apiFetch(`/api/dataset/targets/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchDataset();
+      }
+    } catch (err) {
+      console.error('Failed to delete target:', err);
+    }
   };
 
-  // Filter library collection
-  const filteredCatalog = catalog.filter((asset) => {
-    if (!librarySearch) return true;
-    const q = librarySearch.toLowerCase().trim();
-    return (
-      asset.dishName?.toLowerCase().includes(q) ||
-      asset.universalName?.toLowerCase().includes(q) ||
-      asset.filename?.toLowerCase().includes(q) ||
-      asset.storageKey?.toLowerCase().includes(q)
-    );
-  });
+  // Import CSV or Excel Data
+  const handleImportCsvOrExcel = async (rawText: string) => {
+    const res = await apiFetch('/api/dataset/targets/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rawText }),
+    });
+    if (res.ok) {
+      fetchDataset();
+    }
+  };
 
-  // Calculate library statistics
-  const totalBytes = catalog.reduce((acc, cur) => acc + (cur.byteSize || 0), 0);
-  const avgKb = catalog.length > 0 ? (totalBytes / 1024 / catalog.length).toFixed(1) : '0';
+  // Add Target Dish
+  const handleAddTargetDish = async (name: string, category: string, dietary: string) => {
+    const res = await apiFetch('/api/dataset/targets/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, category, dietary }),
+    });
+    if (res.ok) {
+      fetchDataset();
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
-      {/* Full-screen Drag Overlay */}
-      {isWindowDragging && (
-        <div className="fixed inset-0 z-50 bg-amber-600/90 backdrop-blur-md flex flex-col items-center justify-center pointer-events-none transition-all animate-in fade-in">
-          <div className="p-8 rounded-3xl bg-slate-950/90 border-2 border-amber-400 text-center shadow-2xl max-w-md mx-4">
-            <Upload className="w-16 h-16 text-amber-400 mx-auto mb-4 animate-bounce" />
-            <h2 className="text-2xl font-black text-white tracking-tight">Drop Food Image Here</h2>
-            <p className="text-sm text-slate-300 mt-2">
-              Instant 480 × 480 WebP conversion with automatic universal naming
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Header */}
-      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-20">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans antialiased">
+      {/* Top Header */}
+      <header className="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-400 flex items-center justify-center shadow-lg shadow-amber-900/40">
-              <UtensilsCrossed className="w-5 h-5 text-slate-950" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-sky-500 flex items-center justify-center text-white shadow-md">
+              <UtensilsCrossed className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="font-extrabold text-base tracking-tight text-white">
-                  Acropin Food Image System
-                </h1>
-                <span className="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-300 font-mono rounded-full font-bold border border-amber-500/30">
-                  Sharp + libvips
+                <h1 className="font-bold text-base text-slate-100 tracking-tight">Acropin</h1>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-mono font-semibold">
+                  Universal Food Library
                 </span>
               </div>
-              <p className="text-xs text-slate-400">
-                Food image library with 480, 960, and source-supported 1600 px WebP sizes
-              </p>
+              <p className="text-xs text-slate-400">Excel-Grade Food Image Inventory & Multi-Tier Sharp Processor</p>
             </div>
           </div>
 
-          {/* Navigation Pills */}
-          <div className="flex items-center gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800">
+          {/* Navigation Tabs */}
+          <nav className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-medium">
             <button
-              type="button"
+              onClick={() => setActiveTab('inventory')}
+              className={`px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors ${
+                activeTab === 'inventory'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              }`}
+            >
+              <TableIcon className="w-3.5 h-3.5" />
+              <span>Excel Inventory</span>
+            </button>
+
+            <button
               onClick={() => setActiveTab('processor')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors ${
                 activeTab === 'processor'
-                  ? 'bg-amber-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-sky-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
               }`}
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Processor</span>
+              <Upload className="w-3.5 h-3.5" />
+              <span>Process & Contribute</span>
             </button>
+
             <button
-              type="button"
-              onClick={() => setActiveTab('library')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                activeTab === 'library'
-                  ? 'bg-amber-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
+              onClick={() => setActiveTab('queue')}
+              className={`px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors ${
+                activeTab === 'queue'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
               }`}
             >
-              <Database className="w-3.5 h-3.5" />
-              <span>Image Library</span>
-              <span className="ml-1 px-1.5 py-0.2 bg-slate-800 text-[10px] rounded-full text-amber-300 font-mono">
-                {catalog.length}
-              </span>
+              <Clock className="w-3.5 h-3.5" />
+              <span>Review Queue</span>
+              {pendingAssets.length > 0 && (
+                <span className="ml-0.5 px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 text-[10px] font-bold">
+                  {pendingAssets.length}
+                </span>
+              )}
             </button>
-          </div>
+
+            <button
+              onClick={() => setActiveTab('assets')}
+              className={`px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors ${
+                activeTab === 'assets'
+                  ? 'bg-slate-800 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Catalog Assets ({catalog.length})</span>
+            </button>
+          </nav>
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-8">
-        <section className="mb-6 flex flex-col gap-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-sm font-bold text-white">Free API access for restaurant apps</h2>
-            <p className="mt-1 text-xs text-slate-400">Contact the owner to request an approved API key. Keys are issued individually with usage limits.</p>
-          </div>
-          <a
-            href={API_ACCESS_CONTACT_URL}
-            className="inline-flex shrink-0 items-center justify-center rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-slate-950 transition hover:bg-amber-400"
-          >
-            Request free API access
-          </a>
-          <button
-            type="button"
-            onClick={() => {
-              if (requestAdminAccess()) void fetchCatalog();
-            }}
-            className="inline-flex shrink-0 items-center justify-center rounded-xl border border-slate-700 px-4 py-2 text-xs font-bold text-slate-300 transition hover:border-slate-500 hover:text-white"
-          >
-            Owner dashboard
-          </button>
-        </section>
-        {activeTab === 'processor' ? (
-          <div className="space-y-8">
-            {/* Primary Processing Card */}
-            <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 mb-6 border-b border-slate-800 gap-4">
+      {/* Main Content Body */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* TAB 1: EXCEL-LIKE SPREADSHEET INVENTORY */}
+        {activeTab === 'inventory' && (
+          <InventoryExcelTable
+            rows={datasetData?.rows || []}
+            totalCount={datasetData?.totalTargetDishes || 0}
+            completedCount={datasetData?.completedCount || 0}
+            missingCount={datasetData?.missingCount || 0}
+            pendingCount={datasetData?.pendingCount || 0}
+            coveragePercent={datasetData?.coveragePercent || 0}
+            isLoading={isLoadingDataset}
+            onRefresh={fetchDataset}
+            onSelectForContribution={handleSelectForContribution}
+            onInspectMetadata={(asset) => setInspectingAsset(asset)}
+            onViewVariants={(asset) => setViewingVariantsAsset(asset)}
+            onDeleteTarget={handleDeleteTarget}
+            onImportCsvOrExcel={handleImportCsvOrExcel}
+            onAddTargetDish={handleAddTargetDish}
+          />
+        )}
+
+        {/* TAB 2: IMAGE PROCESSOR & CONTRIBUTOR DROP ZONE */}
+        {activeTab === 'processor' && (
+          <div className="max-w-4xl mx-auto space-y-6">
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+              <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                    <FileImage className="w-5 h-5 text-amber-400" /> Process & Build Universal Library
+                  <h2 className="text-base font-semibold text-slate-100 flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-sky-400" />
+                    Food Image Processing & Clean Metadata Stamper
                   </h2>
                   <p className="text-xs text-slate-400 mt-1">
-                    Drop any food photo or open-source image URL. Converts to exact 480 × 480 sRGB WebP with default universal single name.
+                    Converts any food image into 4 standard WebP variants (128px, 480px, 960px, 1600px), cleanly strips all external EXIF/camera metadata, and embeds Acropin universal tags.
                   </p>
                 </div>
-
-                {/* Input Mode Selector */}
-                <div className="flex items-center gap-1 p-1 bg-slate-950 rounded-xl border border-slate-800 self-start sm:self-auto">
+                <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
                   <button
-                    type="button"
-                    onClick={() => {
-                      setInputMode('upload');
-                      setError(null);
-                    }}
-                    className={`py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                      inputMode === 'upload'
-                        ? 'bg-amber-600 text-white'
-                        : 'text-slate-400 hover:text-slate-200'
+                    onClick={() => setInputMode('upload')}
+                    className={`px-3 py-1 rounded-md transition-colors ${
+                      inputMode === 'upload' ? 'bg-slate-800 text-white font-medium' : 'text-slate-400'
                     }`}
                   >
-                    <Upload className="w-3.5 h-3.5" /> Drag & Drop / File
+                    Upload / Drop
                   </button>
                   <button
-                    type="button"
-                    onClick={() => {
-                      setInputMode('url');
-                      setError(null);
-                    }}
-                    className={`py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                      inputMode === 'url'
-                        ? 'bg-amber-600 text-white'
-                        : 'text-slate-400 hover:text-slate-200'
+                    onClick={() => setInputMode('url')}
+                    className={`px-3 py-1 rounded-md transition-colors ${
+                      inputMode === 'url' ? 'bg-slate-800 text-white font-medium' : 'text-slate-400'
                     }`}
                   >
-                    <LinkIcon className="w-3.5 h-3.5" /> Image URL
+                    Image URL
                   </button>
                 </div>
               </div>
 
-              <form onSubmit={handleProcess} className="space-y-6">
-                {/* Mode 1: Drag & Drop Zone */}
+              <form onSubmit={handleProcessAndSubmit} className="space-y-5">
+                {/* File Drop Zone or URL Input */}
                 {inputMode === 'upload' ? (
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-2">
-                      Drop Food Image File or Click to Browse
-                    </label>
-                    <div
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        setIsDropZoneOver(true);
-                      }}
-                      onDragLeave={() => setIsDropZoneOver(false)}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        setIsDropZoneOver(false);
-                        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                          handleSelectFile(e.dataTransfer.files[0]);
-                        }
-                      }}
-                      className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition cursor-pointer ${
-                        isDropZoneOver
-                          ? 'border-amber-400 bg-amber-500/10 scale-[1.01]'
-                          : file
-                          ? 'border-emerald-500/50 bg-slate-950/70'
-                          : 'border-slate-700 hover:border-amber-500/70 bg-slate-950/40'
-                      }`}
-                    >
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp,image/avif"
-                        onChange={handleFileChange}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                      />
-
-                      {file ? (
-                        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                          {filePreview && (
-                            <img
-                              src={filePreview}
-                              alt="Selected food preview"
-                              className="w-20 h-20 rounded-xl object-cover border border-slate-700 shadow-md"
-                            />
-                          )}
-                          <div className="text-left">
-                            <div className="flex items-center gap-2">
-                              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                              <p className="text-sm font-bold text-white">{file.name}</p>
-                            </div>
-                            <p className="text-xs text-slate-400 mt-1 font-mono">
-                              {(file.size / 1024).toFixed(1)} KB • Ready for Sharp libvips 480×480 WebP crop
-                            </p>
-                            <span className="text-[11px] text-amber-400 underline mt-1 inline-block">
-                              Click or drop another file to replace
-                            </span>
-                          </div>
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDragOver(true);
+                    }}
+                    onDragLeave={() => setIsDragOver(false)}
+                    onDrop={handleDrop}
+                    className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${
+                      isDragOver
+                        ? 'border-sky-400 bg-sky-950/20'
+                        : file
+                        ? 'border-emerald-500/50 bg-emerald-950/10'
+                        : 'border-slate-800 bg-slate-950 hover:border-slate-700'
+                    }`}
+                  >
+                    {filePreview ? (
+                      <div className="flex flex-col items-center gap-3">
+                        <img
+                          src={filePreview}
+                          alt="Preview"
+                          className="w-32 h-32 object-cover rounded-xl shadow-lg border border-slate-700"
+                        />
+                        <div className="text-xs text-slate-300">
+                          <span className="font-semibold text-emerald-400">{file?.name}</span> (
+                          {file ? (file.size / 1024).toFixed(1) : 0} KB)
                         </div>
-                      ) : (
-                        <div className="flex flex-col items-center">
-                          <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-amber-400 mb-3 shadow-inner">
-                            <Upload className="w-6 h-6" />
-                          </div>
-                          <p className="text-sm font-bold text-white">
-                            Drag & drop your food photo here, or <span className="text-amber-400 underline">browse</span>
+                        <label className="cursor-pointer text-xs text-sky-400 hover:text-sky-300 underline font-medium">
+                          Choose different file
+                          <input type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
+                        </label>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400">
+                          <Upload className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-slate-200">
+                            Drag and drop food image here, or{' '}
+                            <label className="text-sky-400 hover:text-sky-300 underline cursor-pointer">
+                              browse files
+                              <input type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
+                            </label>
                           </p>
-                          <p className="text-xs text-slate-400 mt-1 max-w-sm">
-                            Supports JPG, PNG, WebP. Tip: You can also press <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px] text-slate-300 font-mono">Ctrl+V</kbd> anywhere to paste an image!
+                          <p className="text-xs text-slate-500 mt-1">
+                            Supports JPEG, PNG, WebP, AVIF, TIFF up to 15 MB. Generated from ChatGPT/DALL-E or open-source.
                           </p>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  /* Mode 2: Open Source Image URL */
-                  <div className="space-y-3">
-                    <label className="block text-xs font-semibold text-slate-300">
-                      Open Source Food Image URL
-                    </label>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Open-Source Image URL *</label>
                     <div className="relative">
-                      <LinkIcon className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <LinkIcon className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         type="url"
-                        placeholder="https://images.unsplash.com/... or https://upload.wikimedia.org/..."
+                        placeholder="https://example.com/food-dish.jpg"
                         value={imageUrl}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setImageUrl(val);
-                          setError(null);
-                          if (val && !dishTitle) {
-                            try {
-                              const pathName = new URL(val).pathname.split('/').pop() || '';
-                              const extracted = pathName.replace(/[-_]/g, ' ').replace(/\.[^/.]+$/, '');
-                              handleApplyRawName(extracted);
-                            } catch {
-                              // ignore
-                            }
-                          }
-                        }}
-                        className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500 font-mono text-xs"
+                        onChange={(e) => setImageUrl(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs text-slate-200 focus:outline-hidden focus:border-sky-500"
                       />
-                    </div>
-
-                    {/* Quick 1-Click Samples */}
-                    <div>
-                      <span className="text-[11px] text-slate-400 block mb-1.5 font-medium">
-                        Quick 1-Click Open-Source Samples:
-                      </span>
-                      <div className="flex flex-wrap gap-2">
-                        {OPEN_SOURCE_SAMPLES.map((sample, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => {
-                              setImageUrl(sample.url);
-                              handleApplyRawName(sample.dish);
-                              setError(null);
-                            }}
-                            className="px-2.5 py-1 bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg text-xs font-medium transition border border-slate-800 flex items-center gap-1.5"
-                          >
-                            <span>{sample.title}</span>
-                            <span className="text-[10px] text-slate-500">({sample.source})</span>
-                          </button>
-                        ))}
-                      </div>
                     </div>
                   </div>
                 )}
 
-                {/* Single Universal Name Box (Crucial User Requirement) */}
-                <div className="bg-slate-950/80 border border-amber-500/30 rounded-2xl p-4 sm:p-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-amber-400" />
-                      <span className="text-xs font-bold text-white uppercase tracking-wider">
-                        Single Standard Universal Name
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded-full border border-slate-800">
-                      Standard Default Format
-                    </span>
+                {/* Dish Name & Universal Identifier */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Standard Dish Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Margherita Pizza"
+                      value={dishTitle}
+                      onChange={(e) => handleDishTitleChange(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-hidden focus:border-sky-500"
+                    />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Dish Title */}
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-400 mb-1">
-                        Dish Title (Human Readable)
-                      </label>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">
+                      Universal Identifier Slug (Auto-Derived)
+                    </label>
+                    <div className="flex items-center gap-2">
                       <input
                         type="text"
-                        placeholder="e.g. Margherita Pizza, Classic Cheeseburger"
-                        value={dishTitle}
-                        onChange={(e) => handleApplyRawName(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 font-medium"
+                        required
+                        value={universalSlug}
+                        onChange={(e) => {
+                          setUniversalSlug(e.target.value);
+                          setIsSlugManuallyEdited(true);
+                        }}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-emerald-400 focus:outline-hidden focus:border-sky-500"
                       />
                     </div>
+                  </div>
+                </div>
 
-                    {/* Universal Single Slug */}
+                {/* Contributor DCO & Sign-Off */}
+                <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between text-xs font-medium text-slate-300">
+                    <span className="flex items-center gap-1.5 text-slate-200">
+                      <User className="w-4 h-4 text-sky-400" />
+                      Contributor Identity & Developer Certificate of Origin (DCO)
+                    </span>
+                    <span className="text-[11px] text-emerald-400 font-mono">Clean EXIF Guarantee</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-400 mb-1 flex items-center justify-between">
-                        <span>Universal Standard Identifier</span>
-                        {isSlugManuallyEdited && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsSlugManuallyEdited(false);
-                              setUniversalSlug(deriveDefaultUniversalName(dishTitle || 'food-dish'));
-                            }}
-                            className="text-[10px] text-amber-400 hover:underline"
-                          >
-                            Reset Auto
-                          </button>
-                        )}
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          placeholder="e.g. margherita-pizza"
-                          value={universalSlug || deriveDefaultUniversalName(dishTitle || 'food-dish')}
-                          onChange={(e) => {
-                            setIsSlugManuallyEdited(true);
-                            setUniversalSlug(
-                              e.target.value
-                                .toLowerCase()
-                                .replace(/[^a-z0-9-]/g, '-')
-                                .replace(/^-+|-+$/g, '')
-                            );
-                          }}
-                          className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-amber-300 font-mono placeholder-slate-500 focus:outline-none focus:border-amber-500"
-                        />
-                      </div>
+                      <label className="block text-[11px] text-slate-400 mb-1">GitHub Username</label>
+                      <input
+                        type="text"
+                        value={contributorGitHub}
+                        onChange={(e) => setContributorGitHub(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-hidden"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-slate-400 mb-1">DCO Sign-Off Email</label>
+                      <input
+                        type="email"
+                        value={contributorDcoEmail}
+                        onChange={(e) => setContributorDcoEmail(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-hidden"
+                      />
                     </div>
                   </div>
 
-                  {/* Standardized Default Format Preview Banner */}
-                  <div className="mt-3 pt-3 border-t border-slate-900 flex flex-wrap items-center justify-between text-xs text-slate-400 gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-500">Default Target File:</span>
-                      <span className="px-2 py-0.5 bg-amber-500/10 text-amber-300 font-mono font-bold rounded border border-amber-500/20">
-                        {(universalSlug || deriveDefaultUniversalName(dishTitle || 'food-dish'))}.webp
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 font-mono text-[11px] text-slate-500">
-                      <span>Serving Key:</span>
-                      <span className="text-slate-300 truncate max-w-xs">
-                        food-assets/{(universalSlug || deriveDefaultUniversalName(dishTitle || 'food-dish'))}/480.webp
-                      </span>
-                    </div>
+                  {/* Submission target choice */}
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-800/80">
+                    <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={submitDirect}
+                        onChange={(e) => setSubmitDirect(e.target.checked)}
+                        className="rounded border-slate-700 text-emerald-500 focus:ring-0"
+                      />
+                      <span>Direct Commit (Organizer/Admin direct publish to active database)</span>
+                    </label>
+                    <span className="text-[11px] text-slate-500">
+                      {submitDirect ? 'Immediate live status' : 'Enters Review Queue'}
+                    </span>
                   </div>
                 </div>
 
-                {/* Focal Point Adjuster */}
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => setShowAdvanced(!showAdvanced)}
-                    className="text-xs text-slate-400 hover:text-amber-400 font-medium flex items-center gap-1.5 transition"
-                  >
-                    <Sliders className="w-3.5 h-3.5" />
-                    <span>{showAdvanced ? 'Hide Crop Focal Point' : 'Adjust Crop Focal Point (Center Default 0.5, 0.5)'}</span>
-                  </button>
-
-                  {showAdvanced && (filePreview || imageUrl) && (
-                    <div className="mt-3 p-4 bg-slate-950 rounded-2xl border border-slate-800">
-                      <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-                        <span>Click on the dish focal center:</span>
-                        <span className="font-mono text-amber-400">
-                          X: {focalX.toFixed(2)}, Y: {focalY.toFixed(2)}
-                        </span>
-                      </div>
-                      <div
-                        onClick={handleFocalClick}
-                        className="relative max-h-56 bg-black rounded-xl overflow-hidden cursor-crosshair flex items-center justify-center border border-slate-800"
-                      >
-                        <img
-                          src={inputMode === 'upload' ? filePreview || '' : imageUrl}
-                          alt="Crop target"
-                          className="max-h-56 object-contain"
-                        />
-                        <div
-                          className="absolute w-6 h-6 border-2 border-amber-400 bg-amber-400/20 rounded-full -translate-x-1/2 -translate-y-1/2 pointer-events-none shadow-lg"
-                          style={{
-                            left: `${focalX * 100}%`,
-                            top: `${focalY * 100}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {error && (
-                  <div className="p-4 bg-rose-950/80 border border-rose-500/40 rounded-xl text-xs text-rose-300 font-medium flex items-center gap-2">
-                    <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                    <span>{error}</span>
+                {errorMessage && (
+                  <div className="p-3 rounded-lg bg-red-950/60 border border-red-800 text-xs text-red-300 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                    <span>{errorMessage}</span>
                   </div>
                 )}
 
-                {/* Process Action Button */}
-                <button
-                  type="submit"
-                  disabled={isProcessing || (inputMode === 'upload' && !file) || (inputMode === 'url' && !imageUrl)}
-                  className="w-full py-4 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 disabled:opacity-50 text-white font-black rounded-2xl text-sm transition shadow-xl shadow-amber-900/30 flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
-                >
-                  {isProcessing ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Processing Real Food Image via Sharp...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      <span>Convert & Save as {(universalSlug || deriveDefaultUniversalName(dishTitle || 'food-dish'))}.webp</span>
-                    </>
-                  )}
-                </button>
+                {/* Submit Button */}
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={isProcessing}
+                    className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-sky-950/50 flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Generating 4 Variants & Sanitizing EXIF...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>{submitDirect ? 'Process & Direct Commit' : 'Process & Submit to Review Queue'}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </form>
             </div>
 
-            {/* Latest Processed Output Banner */}
-            {result && (
-              <div className="bg-slate-900 border border-emerald-500/40 rounded-3xl p-6 sm:p-8 shadow-2xl">
-                <div className="flex items-center justify-between pb-4 mb-6 border-b border-slate-800">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                      <CheckCircle2 className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-bold text-white">Processed & Saved to Library</h3>
-                      <p className="text-xs text-slate-400">
-                        Created exact 480 × 480 sRGB WebP with standard universal name.
-                      </p>
-                    </div>
+            {/* Last Processing Result Card */}
+            {lastResult && (
+              <div className="bg-slate-900 border border-emerald-900/50 rounded-xl p-6 shadow-xl animate-in fade-in duration-200 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2 text-emerald-400 font-semibold text-sm">
+                    <CheckCircle2 className="w-5 h-5" />
+                    <span>Image Successfully Processed into 4 Standard WebP Variants!</span>
                   </div>
-                  <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 text-xs font-mono font-bold rounded-full border border-emerald-500/30">
-                    {result.asset.filename}
+                  <span className="text-xs font-mono text-slate-400">
+                    Status:{' '}
+                    <span className={lastResult.asset.approvalStatus === 'approved' ? 'text-emerald-400 font-bold' : 'text-sky-400 font-bold'}>
+                      {lastResult.asset.approvalStatus.toUpperCase()}
+                    </span>
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-                  {/* Real Image 480x480 Preview */}
-                  <div className="flex flex-col items-center">
-                    <div className="relative w-64 h-64 sm:w-72 sm:h-72 rounded-2xl overflow-hidden bg-black border-2 border-emerald-500/40 shadow-xl">
-                      <img
-                        src={result.asset.publicUrl}
-                        alt={result.asset.dishName}
-                        width={480}
-                        height={480}
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute top-2 right-2 bg-black/85 backdrop-blur-xs text-[10px] font-mono text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30">
-                        480 × 480 WebP
-                      </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="flex flex-col items-center justify-center bg-slate-950 p-4 rounded-xl border border-slate-800">
+                    <img
+                      src={lastResult.asset.thumbnailUrl || lastResult.asset.publicUrl}
+                      alt={lastResult.asset.dishName}
+                      className="w-32 h-32 object-contain rounded-lg shadow"
+                    />
+                    <div className="mt-2 text-xs font-mono text-slate-400 text-center">
+                      Primary 480×480 WebP • {(lastResult.asset.byteSize / 1024).toFixed(1)} KB
                     </div>
-                    <span className="text-xs text-slate-400 mt-2 font-mono">
-                      {(result.asset.byteSize / 1024).toFixed(1)} KB • Quality: {result.asset.processingQuality}
-                      {result.compressionRatio ? ` • Saved ${result.compressionRatio}` : ''}
-                    </span>
                   </div>
 
-                  {/* Metadata Specs */}
-                  <div className="space-y-4">
-                    <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-2.5 text-xs font-mono">
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Universal Name:</span>
-                        <span className="text-amber-400 font-bold">{result.asset.universalName}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Standard File:</span>
-                        <span className="text-emerald-400 font-bold">{result.asset.filename}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Dimensions:</span>
-                        <span className="text-slate-200">480 × 480 px (Square)</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Format & Color:</span>
-                        <span className="text-slate-200">WebP (sRGB)</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">File Byte Size:</span>
-                        <span className="text-amber-400 font-bold">{(result.asset.byteSize / 1024).toFixed(1)} KB</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500">SHA-256 Hash:</span>
-                        <p className="text-[10px] text-slate-400 truncate mt-0.5 font-mono">
-                          {result.asset.sha256Hash}
-                        </p>
+                  <div className="md:col-span-2 space-y-2 text-xs">
+                    <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-1">
+                      <div className="font-semibold text-slate-200">Generated Hierarchy Variants:</div>
+                      <div className="text-slate-400 text-[11px] grid grid-cols-2 gap-2 pt-1 font-mono">
+                        <div>• 128×128 (Thumbnail): {lastResult.asset.thumbnailByteSize ? (lastResult.asset.thumbnailByteSize / 1024).toFixed(1) : '—'} KB</div>
+                        <div>• 480×480 (Card): {(lastResult.asset.byteSize / 1024).toFixed(1)} KB</div>
+                        <div>• 960×960 (Retina 2x): {lastResult.asset.retinaByteSize ? (lastResult.asset.retinaByteSize / 1024).toFixed(1) : '—'} KB</div>
+                        <div>• 1600×1600 (Hi-Res): {lastResult.asset.hiResByteSize ? (lastResult.asset.hiResByteSize / 1024).toFixed(1) : '—'} KB</div>
                       </div>
                     </div>
 
-                    {/* Quick Action Buttons */}
-                    <div className="flex flex-wrap gap-2 pt-2">
-                      <a
-                        href={result.asset.publicUrl}
-                        download={result.asset.filename}
-                        className="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-amber-900/30"
-                      >
-                        <Download className="w-3.5 h-3.5" /> Download {result.asset.filename}
-                      </a>
+                    <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 flex items-center justify-between">
+                      <span className="text-slate-300">Clean EXIF & Acropin Metadata Tags:</span>
                       <button
-                        type="button"
-                        onClick={() => copyToClipboard(result.asset.publicUrl, 'result_url')}
-                        className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 border border-slate-700"
+                        onClick={() => setInspectingAsset(lastResult.asset)}
+                        className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 rounded text-sky-400 text-[11px] font-medium"
                       >
-                        {copiedId === 'result_url' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedId === 'result_url' ? 'Copied URL!' : 'Copy URL'}</span>
+                        Inspect Tags
+                      </button>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button
+                        onClick={() => setViewingVariantsAsset(lastResult.asset)}
+                        className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-medium"
+                      >
+                        Inspect & Download 4 Sizes
                       </button>
                       <button
-                        type="button"
-                        onClick={() => {
-                          const tag = `<img src="${result.asset.publicUrl}" alt="${result.asset.dishName}" width="480" height="480" loading="lazy" />`;
-                          copyToClipboard(tag, 'result_tag');
-                        }}
-                        className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 border border-slate-700"
+                        onClick={() => setActiveTab('inventory')}
+                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs"
                       >
-                        {copiedId === 'result_tag' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Layers className="w-3.5 h-3.5" />}
-                        <span>{copiedId === 'result_tag' ? 'Copied HTML!' : 'Copy <img>'}</span>
+                        Return to Excel Table
                       </button>
                     </div>
                   </div>
@@ -937,235 +757,94 @@ export default function App() {
               </div>
             )}
           </div>
-        ) : null}
+        )}
 
-        {/* Centralized Food Image Library / Collection Manager */}
-        {(activeTab === 'library' || activeTab === 'processor') && (
-          <div className="mt-10">
-            {/* Library Section Header */}
-            <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 mb-6 border-b border-slate-800 gap-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Database className="w-5 h-5 text-amber-400" />
-                    <h2 className="text-lg font-bold text-white">Centralized Image Library Collection</h2>
-                    <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 text-xs font-mono rounded-full font-bold">
-                      {catalog.length} {catalog.length === 1 ? 'item' : 'items'}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-400 mt-1">
-                    All processed food images stored with clean universal names for rapid re-use across menu items and restaurants.
-                  </p>
-                </div>
+        {/* TAB 3: ORGANIZER REVIEW QUEUE */}
+        {activeTab === 'queue' && (
+          <ReviewQueueView
+            pendingAssets={pendingAssets}
+            isLoading={isLoadingQueue}
+            onRefresh={fetchReviewQueue}
+            onDecision={handleReviewDecision}
+            onViewVariants={(asset) => setViewingVariantsAsset(asset)}
+          />
+        )}
 
-                {/* Library Stats */}
-                <div className="flex items-center gap-4 bg-slate-950 p-2.5 px-4 rounded-2xl border border-slate-800 text-xs font-mono">
-                  <div>
-                    <span className="text-slate-500 block text-[10px]">AVG SIZE</span>
-                    <span className="text-amber-400 font-bold">{avgKb} KB</span>
-                  </div>
-                  <div className="w-px h-6 bg-slate-800" />
-                  <div>
-                    <span className="text-slate-500 block text-[10px]">STORAGE</span>
-                    <span className="text-emerald-400 font-bold">{(totalBytes / 1024).toFixed(1)} KB</span>
-                  </div>
-                </div>
+        {/* TAB 4: CATALOG ASSETS GALLERY */}
+        {activeTab === 'assets' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-slate-100">Live Food Image Asset Library</h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  High-fidelity WebP food assets delivered with immutable CDN caching headers.
+                </p>
               </div>
+              <div className="relative w-64">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Filter library..."
+                  value={assetSearch}
+                  onChange={(e) => setAssetSearch(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-200 focus:outline-hidden"
+                />
+              </div>
+            </div>
 
-              {/* Search & Filter Bar */}
-              <div className="flex flex-col sm:flex-row items-center gap-3 mb-6">
-                <div className="relative flex-1 w-full">
-                  <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="Search by universal name (e.g. margherita-pizza), dish name, or filename..."
-                    value={librarySearch}
-                    onChange={(e) => setLibrarySearch(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 font-mono"
-                  />
-                </div>
-                {librarySearch && (
-                  <button
-                    type="button"
-                    onClick={() => setLibrarySearch('')}
-                    className="px-3 py-2 bg-slate-800 text-slate-400 hover:text-white rounded-xl text-xs transition"
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {catalog
+                .filter((a) => !assetSearch || a.dishName.toLowerCase().includes(assetSearch.toLowerCase()))
+                .map((asset) => (
+                  <div
+                    key={asset.id}
+                    className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden hover:border-slate-700 transition-all group"
                   >
-                    Clear Filter
-                  </button>
-                )}
-              </div>
-
-              {/* Gallery Grid */}
-              {isLoadingCatalog ? (
-                <div className="p-12 text-center text-slate-500 flex items-center justify-center gap-2">
-                  <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
-                  <span>Loading library assets...</span>
-                </div>
-              ) : filteredCatalog.length === 0 ? (
-                <div className="p-12 text-center border-2 border-dashed border-slate-800 rounded-2xl bg-slate-950/40">
-                  <FolderHeart className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-                  <h3 className="text-sm font-bold text-slate-300">
-                    {librarySearch ? 'No matching images found' : 'Your collection is empty'}
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                    {librarySearch
-                      ? 'Try searching with another keyword or clear the search filter.'
-                      : 'Upload an image above or click one of the open source samples to start building your library.'}
-                  </p>
-                  {!librarySearch && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveTab('processor');
-                        setInputMode('url');
-                        setImageUrl(OPEN_SOURCE_SAMPLES[0].url);
-                        handleApplyRawName(OPEN_SOURCE_SAMPLES[0].dish);
-                      }}
-                      className="mt-4 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" /> Try Sample Image
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredCatalog.map((asset) => (
-                    <div
-                      key={asset.id}
-                      className="bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-2xl p-4 flex flex-col justify-between transition group shadow-lg"
-                    >
-                      <div>
-                        {/* Image Square Thumbnail */}
-                        <div className="relative aspect-square rounded-xl overflow-hidden bg-black mb-3 border border-slate-800 group-hover:border-amber-500/50 transition">
-                          <img
-                            src={asset.publicUrl}
-                            alt={asset.dishName}
-                            loading="lazy"
-                            width={480}
-                            height={480}
-                            className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
-                          />
-                          <div className="absolute top-2 right-2 bg-black/80 backdrop-blur-xs text-[10px] font-mono text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30">
-                            480 × 480
-                          </div>
-                          <div className="absolute bottom-2 left-2 bg-black/80 backdrop-blur-xs text-[10px] font-mono text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30">
-                            {(asset.byteSize / 1024).toFixed(1)} KB
-                          </div>
-                        </div>
-
-                        {/* Title & Universal Name */}
-                        <div>
-                          <h4 className="text-sm font-bold text-white truncate" title={asset.dishName}>
-                            {asset.dishName}
-                          </h4>
-                          <div className="mt-1 flex items-center gap-1.5 font-mono text-xs text-amber-400 truncate">
-                            <span className="text-slate-500">File:</span>
-                            <span className="font-semibold text-slate-200 truncate">{asset.filename || `${asset.universalName}.webp`}</span>
-                          </div>
-                          <div className="mt-0.5 font-mono text-[11px] text-slate-500 truncate">
-                            Universal: <span className="text-slate-400">{asset.universalName}</span>
-                          </div>
-                        </div>
+                    <div className="relative aspect-square bg-slate-950 overflow-hidden">
+                      <img
+                        src={asset.thumbnailUrl || asset.publicUrl}
+                        alt={asset.dishName}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <button
+                        onClick={() => setViewingVariantsAsset(asset)}
+                        className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-medium transition-opacity gap-1"
+                      >
+                        <Eye className="w-4 h-4" />
+                        4 Sizes
+                      </button>
+                    </div>
+                    <div className="p-3 space-y-1">
+                      <div className="font-semibold text-slate-100 text-xs truncate" title={asset.dishName}>
+                        {asset.dishName}
                       </div>
-
-                      {/* Action Bar */}
-                      <div className="mt-4 pt-3 border-t border-slate-900 flex items-center justify-between gap-1">
-                        <div className="flex items-center gap-1">
-                          {/* 1-Click Download with clean universal name */}
-                          <a
-                            href={asset.publicUrl}
-                            download={asset.filename || `${asset.universalName}.webp`}
-                            title="Download standard 480x480 WebP"
-                            className="p-2 bg-slate-900 hover:bg-amber-600 text-slate-300 hover:text-white rounded-lg transition"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                          </a>
-
-                          {/* Copy URL */}
-                          <button
-                            type="button"
-                            onClick={() => copyToClipboard(asset.publicUrl, `card_url_${asset.id}`)}
-                            title="Copy image URL"
-                            className="p-2 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg transition"
-                          >
-                            {copiedId === `card_url_${asset.id}` ? (
-                              <Check className="w-3.5 h-3.5 text-emerald-400" />
-                            ) : (
-                              <Copy className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-
-                          {/* Copy HTML tag */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const tag = `<img src="${asset.publicUrl}" alt="${asset.dishName}" width="480" height="480" loading="lazy" />`;
-                              copyToClipboard(tag, `card_tag_${asset.id}`);
-                            }}
-                            title="Copy <img> HTML tag"
-                            className="p-2 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg transition"
-                          >
-                            {copiedId === `card_tag_${asset.id}` ? (
-                              <Check className="w-3.5 h-3.5 text-emerald-400" />
-                            ) : (
-                              <Layers className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-                        </div>
-
-                        {/* Delete Asset */}
-                        <div>
-                          {deleteConfirmId === asset.id ? (
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteAsset(asset.id)}
-                                className="px-2 py-1 bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold rounded transition"
-                              >
-                                Confirm
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setDeleteConfirmId(null)}
-                                className="px-2 py-1 bg-slate-800 text-slate-400 hover:text-white text-[10px] rounded transition"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setDeleteConfirmId(asset.id)}
-                              title="Delete from collection"
-                              className="p-2 text-slate-600 hover:text-rose-400 hover:bg-rose-950/40 rounded-lg transition"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
+                      <div className="text-[10px] text-slate-400 font-mono truncate">{asset.universalName}</div>
+                      <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-800">
+                        <span>{(asset.byteSize / 1024).toFixed(1)} KB</span>
+                        <button
+                          onClick={() => setInspectingAsset(asset)}
+                          className="text-sky-400 hover:text-sky-300"
+                          title="Inspect metadata tags"
+                        >
+                          Tags
+                        </button>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                  </div>
+                ))}
             </div>
           </div>
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-800 bg-slate-950 py-6 text-center text-xs text-slate-500">
-        <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-slate-400">Acropin Food Engine</span>
-            <span>•</span>
-            <span>Sharp 480×480 WebP Processing</span>
-          </div>
-          <div className="font-mono text-[11px] text-slate-600">
-            Immutable CDN Caching • Single Universal Food Naming
-          </div>
-        </div>
-      </footer>
+      {/* MODALS */}
+      {inspectingAsset && (
+        <MetadataInspectorModal asset={inspectingAsset} onClose={() => setInspectingAsset(null)} />
+      )}
+
+      {viewingVariantsAsset && (
+        <VariantPreviewModal asset={viewingVariantsAsset} onClose={() => setViewingVariantsAsset(null)} />
+      )}
     </div>
   );
 }

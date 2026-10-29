@@ -34,7 +34,17 @@ import {
 import { CANONICAL_DISHES } from './src/lib/catalog/canonical-dishes.js';
 import { matchCanonicalDish } from './src/lib/catalog/matcher.js';
 import { generateImportPreview, commitMenuImport } from './src/lib/import/menu-importer.js';
-import type { AssetApprovalStatus, ImageAsset, LicenseType } from './src/lib/images/types.js';
+import { inspectFoodImageWithMl } from './src/lib/server/ml-anti-corruption.js';
+import {
+  initializeTargetDataset,
+  getAllTargetItems,
+  addTargetItem,
+  bulkImportTargets,
+  deleteTargetItem,
+  computeDatasetStatus,
+  flushTargets,
+} from './src/lib/server/dataset-target-store.js';
+import type { AssetApprovalStatus, ImageAsset, LicenseType, AcropinMetadataTags } from './src/lib/images/types.js';
 
 dotenv.config();
 
@@ -97,6 +107,7 @@ const upload = multer({
 // Initialize Stores
 await initializeCatalog();
 await initializeRestaurants();
+await initializeTargetDataset();
 
 // -------------------------------------------------------------
 // Image Serving Route with Immutable CDN Caching Headers
@@ -153,7 +164,7 @@ app.delete('/api/images/collection/:id', async (req, res) => {
   }
 });
 
-// Upload and process an image
+// Upload and process an image with dual resolution & ML anti-corruption filter
 app.post('/api/images/upload', upload.single('image'), async (req, res) => {
   try {
     if (!req.file || !req.file.buffer) {
@@ -171,12 +182,14 @@ app.post('/api/images/upload', upload.single('image'), async (req, res) => {
       licenseEvidence,
       requiredAttribution,
       sourceProvider,
+      contributorGitHub,
+      contributorDcoEmail,
     } = req.body;
 
     const fx = focalPointX ? parseFloat(focalPointX) : 0.5;
     const fy = focalPointY ? parseFloat(focalPointY) : 0.5;
 
-    // Execute Sharp Processing Engine
+    // Execute Sharp Processing Engine (generates 480x480 and 128x128 WebP)
     const processed = await processFoodImage(req.file.buffer, {
       width: 480,
       height: 480,
@@ -189,12 +202,57 @@ app.post('/api/images/upload', upload.single('image'), async (req, res) => {
     const targetRawName = clientUniversalName || dishName || req.file.originalname;
     const universal = toUniversalFoodName(targetRawName);
     const assetId = `asset_${universal.universalName}`;
-    const storageKey = `food-assets/${universal.universalName}/480.webp`;
+
+    // Machine Learning Real-Time Anti-Corruption Filter
+    const mlInspection = await inspectFoodImageWithMl(
+      processed.buffer,
+      universal.displayName,
+      universal.universalName
+    );
+
+    // Strict Enforcement: Deny and refuse dataset corruption/non-food
+    if (!mlInspection.antiCorruptionPassed) {
+      res.status(422).json({
+        error: `ML Anti-Corruption Filter Denied: ${mlInspection.rejectionReason || 'Image failed food verification check.'}`,
+        mlInspection,
+        denied: true,
+      });
+      return;
+    }
+
+    const storageKey480 = `food-assets/${universal.universalName}/480.webp`;
+    const storageKey128 = `food-assets/${universal.universalName}/128.webp`;
     const storage = getStorageProvider();
 
-    const uploadResult = await storage.upload(storageKey, processed.buffer, 'image/webp');
+    // Upload 480x480 standard and 128x128 thumbnail
+    const uploadResult480 = await storage.upload(storageKey480, processed.buffer, 'image/webp');
+    const uploadResult128 = await storage.upload(storageKey128, processed.thumbnailBuffer, 'image/webp');
+
+    // Upload 960x960 retina variant if generated
+    let uploadResult960;
+    if (processed.retinaBuffer) {
+      const storageKey960 = `food-assets/${universal.universalName}/960.webp`;
+      uploadResult960 = await storage.upload(storageKey960, processed.retinaBuffer, 'image/webp');
+    }
+
+    // Upload 1600x1600 hi-res variant if generated
+    let uploadResult1600;
+    if (processed.hiResBuffer) {
+      const storageKey1600 = `food-assets/${universal.universalName}/1600.webp`;
+      uploadResult1600 = await storage.upload(storageKey1600, processed.hiResBuffer, 'image/webp');
+    }
+
     const duplicateAsset = findAssetByHash(processed.hash);
     const now = new Date().toISOString();
+
+    const cleanGitHub = contributorGitHub ? String(contributorGitHub).trim().replace(/^@/, '') : undefined;
+    const cleanDcoEmail = contributorDcoEmail ? String(contributorDcoEmail).trim() : undefined;
+    const dcoSignOff = cleanGitHub
+      ? `Signed-off-by: ${cleanGitHub} <${cleanDcoEmail || `${cleanGitHub}@users.noreply.github.com`}>`
+      : undefined;
+
+    const isDirectApproved = req.body.adminAutoApprove === 'true' || req.body.submitDirect === 'true';
+    const approvalStatus: AssetApprovalStatus = isDirectApproved ? 'approved' : 'pending_review';
 
     const newAsset: ImageAsset = {
       id: assetId,
@@ -202,8 +260,17 @@ app.post('/api/images/upload', upload.single('image'), async (req, res) => {
       filename: universal.filename,
       dishName: universal.displayName,
       canonicalDishId: canonicalDishId || undefined,
-      storageKey: uploadResult.key,
-      publicUrl: uploadResult.url,
+      storageKey: uploadResult480.key,
+      publicUrl: uploadResult480.url,
+      thumbnailStorageKey: uploadResult128.key,
+      thumbnailUrl: uploadResult128.url,
+      thumbnailByteSize: processed.thumbnailByteSize,
+      retinaStorageKey: uploadResult960?.key,
+      retinaUrl: uploadResult960?.url,
+      retinaByteSize: processed.retinaByteSize,
+      hiResStorageKey: uploadResult1600?.key,
+      hiResUrl: uploadResult1600?.url,
+      hiResByteSize: processed.hiResByteSize,
       sha256Hash: processed.hash,
       width: processed.width,
       height: processed.height,
@@ -217,10 +284,31 @@ app.post('/api/images/upload', upload.single('image'), async (req, res) => {
       processingVersion: 'v1',
       processingQuality: processed.qualityUsed,
       focalPoint: { x: fx, y: fy },
-      approvalStatus: 'approved',
+      approvalStatus,
       createdAt: now,
       updatedAt: now,
       tags: [universal.universalName, 'food-photo'],
+      contributorGitHub: cleanGitHub,
+      contributorDcoEmail: cleanDcoEmail,
+      dcoSignOff,
+      mlInspection,
+      acropinMetadata: {
+        publisher: 'Acropin Open Food Library',
+        universalName: universal.universalName,
+        cleanExif: true,
+        schemaVersion: '2.0',
+        variantsAvailable: [
+          '128x128',
+          '480x480',
+          ...(uploadResult960 ? ['960x960'] : []),
+          ...(uploadResult1600 ? ['1600x1600'] : []),
+        ],
+        license: (licenseType as string) || 'CC0',
+        contributorGitHub: cleanGitHub,
+        dcoSignOff,
+        mlVerified: Boolean(mlInspection?.antiCorruptionPassed),
+        timestamp: now,
+      },
     };
 
     registerAsset(newAsset);
@@ -235,6 +323,7 @@ app.post('/api/images/upload', upload.single('image'), async (req, res) => {
       warning: processed.sizeDeviationWarning,
       sourceDimensions: processed.sourceDimensions,
       compressionRatio: ((1 - processed.byteSize / req.file.buffer.length) * 100).toFixed(1) + '%',
+      mlInspection,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -242,7 +331,7 @@ app.post('/api/images/upload', upload.single('image'), async (req, res) => {
   }
 });
 
-// Process an open source image via remote URL
+// Process an open source image via remote URL with dual resolution & ML anti-corruption
 app.post('/api/images/process-url', async (req, res) => {
   try {
     const {
@@ -256,6 +345,8 @@ app.post('/api/images/process-url', async (req, res) => {
       licenseEvidence,
       requiredAttribution,
       sourceProvider,
+      contributorGitHub,
+      contributorDcoEmail,
     } = req.body;
 
     let buffer: Buffer;
@@ -314,7 +405,7 @@ app.post('/api/images/process-url', async (req, res) => {
     const fx = focalPointX ? parseFloat(focalPointX) : 0.5;
     const fy = focalPointY ? parseFloat(focalPointY) : 0.5;
 
-    // Process through Sharp
+    // Process through Sharp (generates both 480x480 and 128x128 WebP)
     const processed = await processFoodImage(buffer, {
       width: 480,
       height: 480,
@@ -335,12 +426,57 @@ app.post('/api/images/process-url', async (req, res) => {
 
     const universal = toUniversalFoodName(clientUniversalName || rawRef || 'food-dish');
     const assetId = `asset_${universal.universalName}`;
-    const storageKey = `food-assets/${universal.universalName}/480.webp`;
+
+    // Machine Learning Real-Time Anti-Corruption Filter
+    const mlInspection = await inspectFoodImageWithMl(
+      processed.buffer,
+      universal.displayName,
+      universal.universalName
+    );
+
+    // Strict Enforcement: Deny and refuse dataset corruption/non-food
+    if (!mlInspection.antiCorruptionPassed) {
+      res.status(422).json({
+        error: `ML Anti-Corruption Filter Denied: ${mlInspection.rejectionReason || 'Image failed food verification check.'}`,
+        mlInspection,
+        denied: true,
+      });
+      return;
+    }
+
+    const storageKey480 = `food-assets/${universal.universalName}/480.webp`;
+    const storageKey128 = `food-assets/${universal.universalName}/128.webp`;
     const storage = getStorageProvider();
 
-    const uploadResult = await storage.upload(storageKey, processed.buffer, 'image/webp');
+    // Upload 480x480 standard and 128x128 thumbnail
+    const uploadResult480 = await storage.upload(storageKey480, processed.buffer, 'image/webp');
+    const uploadResult128 = await storage.upload(storageKey128, processed.thumbnailBuffer, 'image/webp');
+
+    // Upload 960x960 retina variant if generated
+    let uploadResult960;
+    if (processed.retinaBuffer) {
+      const storageKey960 = `food-assets/${universal.universalName}/960.webp`;
+      uploadResult960 = await storage.upload(storageKey960, processed.retinaBuffer, 'image/webp');
+    }
+
+    // Upload 1600x1600 hi-res variant if generated
+    let uploadResult1600;
+    if (processed.hiResBuffer) {
+      const storageKey1600 = `food-assets/${universal.universalName}/1600.webp`;
+      uploadResult1600 = await storage.upload(storageKey1600, processed.hiResBuffer, 'image/webp');
+    }
+
     const duplicateAsset = findAssetByHash(processed.hash);
     const now = new Date().toISOString();
+
+    const cleanGitHub = contributorGitHub ? String(contributorGitHub).trim().replace(/^@/, '') : undefined;
+    const cleanDcoEmail = contributorDcoEmail ? String(contributorDcoEmail).trim() : undefined;
+    const dcoSignOff = cleanGitHub
+      ? `Signed-off-by: ${cleanGitHub} <${cleanDcoEmail || `${cleanGitHub}@users.noreply.github.com`}>`
+      : undefined;
+
+    const isDirectApproved = req.body.adminAutoApprove === 'true' || req.body.submitDirect === 'true';
+    const approvalStatus: AssetApprovalStatus = isDirectApproved ? 'approved' : 'pending_review';
 
     const newAsset: ImageAsset = {
       id: assetId,
@@ -348,8 +484,17 @@ app.post('/api/images/process-url', async (req, res) => {
       filename: universal.filename,
       dishName: universal.displayName,
       canonicalDishId: canonicalDishId || undefined,
-      storageKey: uploadResult.key,
-      publicUrl: uploadResult.url,
+      storageKey: uploadResult480.key,
+      publicUrl: uploadResult480.url,
+      thumbnailStorageKey: uploadResult128.key,
+      thumbnailUrl: uploadResult128.url,
+      thumbnailByteSize: processed.thumbnailByteSize,
+      retinaStorageKey: uploadResult960?.key,
+      retinaUrl: uploadResult960?.url,
+      retinaByteSize: processed.retinaByteSize,
+      hiResStorageKey: uploadResult1600?.key,
+      hiResUrl: uploadResult1600?.url,
+      hiResByteSize: processed.hiResByteSize,
       sha256Hash: processed.hash,
       width: processed.width,
       height: processed.height,
@@ -364,10 +509,31 @@ app.post('/api/images/process-url', async (req, res) => {
       processingVersion: 'v1',
       processingQuality: processed.qualityUsed,
       focalPoint: { x: fx, y: fy },
-      approvalStatus: 'approved',
+      approvalStatus,
       createdAt: now,
       updatedAt: now,
       tags: [universal.universalName, 'open-source-url'],
+      contributorGitHub: cleanGitHub,
+      contributorDcoEmail: cleanDcoEmail,
+      dcoSignOff,
+      mlInspection,
+      acropinMetadata: {
+        publisher: 'Acropin Open Food Library',
+        universalName: universal.universalName,
+        cleanExif: true,
+        schemaVersion: '2.0',
+        variantsAvailable: [
+          '128x128',
+          '480x480',
+          ...(uploadResult960 ? ['960x960'] : []),
+          ...(uploadResult1600 ? ['1600x1600'] : []),
+        ],
+        license: (licenseType as string) || 'CC0',
+        contributorGitHub: cleanGitHub,
+        dcoSignOff,
+        mlVerified: Boolean(mlInspection?.antiCorruptionPassed),
+        timestamp: now,
+      },
     };
 
     registerAsset(newAsset);
@@ -382,10 +548,215 @@ app.post('/api/images/process-url', async (req, res) => {
       warning: processed.sizeDeviationWarning,
       sourceDimensions: processed.sourceDimensions,
       compressionRatio: ((1 - processed.byteSize / buffer.length) * 100).toFixed(1) + '%',
+      mlInspection,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(400).json({ error: message });
+  }
+});
+
+// Real-time pre-upload ML inspection endpoint
+app.post('/api/ml/inspect', upload.single('image'), async (req, res) => {
+  try {
+    const dishName = req.body.dishName || 'Food Dish';
+    const targetSlug = req.body.universalSlug || '';
+    let buffer: Buffer | null = req.file?.buffer || null;
+
+    if (!buffer && req.body.imageUrl) {
+      const url = req.body.imageUrl;
+      if (url.startsWith('data:image/')) {
+        const base64Data = url.split(';base64,').pop();
+        if (base64Data) buffer = Buffer.from(base64Data, 'base64');
+      } else if (url.startsWith('http://') || url.startsWith('https://')) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        try {
+          const fetchRes = await fetch(url, { signal: controller.signal });
+          clearTimeout(timeout);
+          if (fetchRes.ok) {
+            const ab = await fetchRes.arrayBuffer();
+            buffer = Buffer.from(ab);
+          }
+        } catch {
+          clearTimeout(timeout);
+        }
+      }
+    }
+
+    if (!buffer) {
+      res.status(400).json({ error: 'Provide an image file or valid imageUrl for ML inspection.' });
+      return;
+    }
+
+    const inspection = await inspectFoodImageWithMl(buffer, dishName, targetSlug);
+    res.json({ mlInspection: inspection });
+  } catch (err: unknown) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+// Real-time Excel-like Inventory Dashboard: live missing vs completed dishes
+app.get('/api/menu-tasks', async (_req, res) => {
+  await initializeTargetDataset();
+  const approved = getAllAssets({ status: 'approved' });
+  const pending = getAllAssets({ status: 'pending_review' });
+  const status = computeDatasetStatus(approved, pending);
+  res.json(status);
+});
+
+// Live Target Dataset & Excel Spreadsheet Endpoint
+app.get('/api/dataset/targets', async (_req, res) => {
+  await initializeTargetDataset();
+  const approved = getAllAssets({ status: 'approved' });
+  const pending = getAllAssets({ status: 'pending_review' });
+  const status = computeDatasetStatus(approved, pending);
+  res.json(status);
+});
+
+// Bulk Import or Paste Excel/CSV Menu Data into Database
+app.post('/api/dataset/targets/import', async (req, res) => {
+  try {
+    await initializeTargetDataset();
+    const { items, rawText, replaceExisting } = req.body;
+    let listToImport: Array<{ name: string; category?: string; dietary?: string; region?: string; notes?: string }> = [];
+
+    if (Array.isArray(items)) {
+      listToImport = items;
+    } else if (typeof rawText === 'string') {
+      // Parse CSV or tab-separated Excel rows
+      const lines = rawText.split('\n').map((l: string) => l.trim()).filter(Boolean);
+      for (const line of lines) {
+        // Support tab or comma delimiter
+        const delimiter = line.includes('\t') ? '\t' : ',';
+        const parts = line.split(delimiter).map((p: string) => p.trim().replace(/^["']|["']$/g, ''));
+        if (parts[0] && !parts[0].toLowerCase().startsWith('dish') && !parts[0].toLowerCase().startsWith('name')) {
+          listToImport.push({
+            name: parts[0],
+            category: parts[1] || 'Mains',
+            dietary: parts[2] || 'veg',
+            region: parts[3] || 'Universal',
+            notes: parts[4],
+          });
+        }
+      }
+    }
+
+    const result = bulkImportTargets(listToImport, Boolean(replaceExisting));
+    await flushTargets();
+    const approved = getAllAssets({ status: 'approved' });
+    const pending = getAllAssets({ status: 'pending_review' });
+    const datasetStatus = computeDatasetStatus(approved, pending);
+
+    res.json({
+      success: true,
+      imported: result.added,
+      totalTargets: result.total,
+      datasetStatus,
+    });
+  } catch (err: unknown) {
+    res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+// Add Single Target Dish
+app.post('/api/dataset/targets/add', async (req, res) => {
+  try {
+    await initializeTargetDataset();
+    const { name, category, dietary, region, notes } = req.body;
+    if (!name || typeof name !== 'string') {
+      res.status(400).json({ error: 'Dish name is required.' });
+      return;
+    }
+    const item = addTargetItem(name, category, dietary, region, notes);
+    await flushTargets();
+    res.status(201).json({ success: true, item });
+  } catch (err: unknown) {
+    res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+// Delete a Target Item
+app.delete('/api/dataset/targets/:id', async (req, res) => {
+  try {
+    await initializeTargetDataset();
+    const success = deleteTargetItem(req.params.id);
+    await flushTargets();
+    if (!success) {
+      res.status(404).json({ error: 'Target item not found in dataset.' });
+      return;
+    }
+    res.json({ success: true, message: 'Target item deleted.' });
+  } catch (err: unknown) {
+    res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+// Export Real-time Inventory as CSV
+app.get('/api/dataset/export-csv', async (_req, res) => {
+  await initializeTargetDataset();
+  const approved = getAllAssets({ status: 'approved' });
+  const pending = getAllAssets({ status: 'pending_review' });
+  const status = computeDatasetStatus(approved, pending);
+
+  const header = ['Universal Slug', 'Dish Name', 'Category', 'Dietary', 'Status', '128px URL', '480px URL', '960px URL', '1600px URL', 'Size (KB)', 'Clean EXIF', 'ML Verified'];
+  const rows = status.rows.map((r) => [
+    `"${r.universalSlug}"`,
+    `"${r.name.replace(/"/g, '""')}"`,
+    `"${r.category}"`,
+    `"${r.dietary}"`,
+    `"${r.status}"`,
+    `"${r.asset?.thumbnailUrl || ''}"`,
+    `"${r.asset?.publicUrl || ''}"`,
+    `"${r.asset?.retinaUrl || ''}"`,
+    `"${r.asset?.hiResUrl || ''}"`,
+    r.fileSizeKb,
+    r.metadataTags?.cleanExif ? 'YES' : 'NO',
+    r.metadataTags?.mlVerified ? 'YES' : 'NO',
+  ]);
+
+  const csv = [header.join(','), ...rows.map((row) => row.join(','))].join('\n');
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="acropin-food-inventory.csv"');
+  res.send(csv);
+});
+
+// Organizer Review Queue List
+app.get('/api/images/review-queue', (_req, res) => {
+  const pending = getAllAssets({ status: 'pending_review' });
+  res.json({ pending, count: pending.length });
+});
+
+// Organizer Review Decision (Approve / Reject)
+app.post('/api/images/review-queue/:id/decision', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { decision, rejectionReason } = req.body;
+    if (decision !== 'approve' && decision !== 'reject') {
+      res.status(400).json({ error: 'Decision must be "approve" or "reject".' });
+      return;
+    }
+
+    const newStatus: AssetApprovalStatus = decision === 'approve' ? 'approved' : 'rejected';
+    const updated = updateAssetStatus(id, newStatus, rejectionReason);
+    if (!updated) {
+      res.status(404).json({ error: 'Asset not found in review queue.' });
+      return;
+    }
+
+    await flushCatalog();
+    const approved = getAllAssets({ status: 'approved' });
+    const pending = getAllAssets({ status: 'pending_review' });
+    const datasetStatus = computeDatasetStatus(approved, pending);
+
+    res.json({
+      success: true,
+      asset: updated,
+      datasetStatus,
+      message: decision === 'approve' ? 'Approved and committed to live database.' : 'Submission rejected.',
+    });
+  } catch (err: unknown) {
+    res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
   }
 });
 

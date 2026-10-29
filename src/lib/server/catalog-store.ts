@@ -93,9 +93,11 @@ export function getAllAssets(filter?: {
   status?: AssetApprovalStatus;
   search?: string;
   dishId?: string;
+  includeFixtures?: boolean;
 }): ImageAsset[] {
   initializeCatalog();
-  let list = assetCatalog.filter((a) => !a.tags?.includes('fixture'));
+  const allowFixtures = filter?.includeFixtures ?? (process.env.NODE_ENV === 'test');
+  let list = allowFixtures ? assetCatalog : assetCatalog.filter((a) => !a.tags?.includes('fixture'));
 
   if (filter?.status) {
     list = list.filter((a) => a.approvalStatus === filter.status);

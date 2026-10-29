@@ -1,0 +1,155 @@
+[
+  {
+    "id": "target_margherita-pizza",
+    "name": "Margherita Pizza",
+    "universalSlug": "margherita-pizza",
+    "category": "Mains",
+    "dietary": "veg",
+    "region": "Universal",
+    "createdAt": "2026-10-29T07:32:58.193Z"
+  },
+  {
+    "id": "target_classic-cheeseburger",
+    "name": "Classic Cheeseburger",
+    "universalSlug": "classic-cheeseburger",
+    "category": "Mains",
+    "dietary": "non-veg",
+    "region": "Universal",
+    "createdAt": "2026-10-29T07:32:58.193Z"
+  },
+  {
+    "id": "target_tonkotsu-ramen",
+    "name": "Tonkotsu Ramen",
+    "universalSlug": "tonkotsu-ramen",
+    "category": "Mains",
+    "dietary": "non-veg",
+    "region": "Universal",
+    "createdAt": "2026-10-29T07:32:58.193Z"
+  },
+  {
+    "id": "target_caesar-salad",
+    "name": "Caesar Salad",
+    "universalSlug": "caesar-salad",
+    "category": "Appetizers",
+    "dietary": "veg",
+    "region": "Universal",
+    "createdAt": "2026-10-29T07:32:58.193Z"
+  },
+  {
+    "id": "target_spaghetti-carbonara",
+    "name": "Spaghetti Carbonara",
+    "universalSlug": "spaghetti-carbonara",
+    "category": "Mains",
+    "dietary": "non-veg",
+    "region": "Universal",
+    "createdAt": "2026-10-29T07:32:58.193Z"
+  },
+  {
+    "id": "target_crispy-french-fries",
+    "name": "Crispy French Fries",
+    "universalSlug": "crispy-french-fries",
+    "category": "Sides",
+    "dietary": "vegan",
+    "region": "Universal",
+    "createdAt": "2026-10-29T07:32:58.193Z"
+  },
+  {
+    "id": "target_grilled-atlantic-salmon",
+    "name": "Grilled Atlantic Salmon",
+    "universalSlug": "grilled-atlantic-salmon",
+    "category": "Mains",
+    "dietary": "non-veg",
+    "region": "Universal",
+    "createdAt": "2026-10-29T07:32:58.193Z"
+  },
+  {
+    "id": "target_classic-tiramisu",
+    "name": "Classic Tiramisu",
+    "universalSlug": "classic-tiramisu",
+    "category": "Desserts",
+    "dietary": "veg",
+    "region": "Universal",
+    "createdAt": "2026-10-29T07:32:58.193Z"
+  },
+  {
+    "id": "target_chocolate-fudge-brownie",
+    "name": "Chocolate Fudge Brownie",
+    "universalSlug": "chocolate-fudge-brownie",
+    "category": "Desserts",
+    "dietary": "veg",
+    "region": "Universal",
+    "createdAt": "2026-10-29T07:32:58.193Z"
+  },
+  {
+    "id": "target_cappuccino",
+    "name": "Cappuccino",
+    "universalSlug": "cappuccino",
+    "category": "Beverages",
+    "dietary": "veg",
+    "region": "Universal",
+    "createdAt": "2026-10-29T07:32:58.193Z"
+  },
+  {
+    "id": "target_fresh-guacamole-chips",
+    "name": "Fresh Guacamole & Chips",
+    "universalSlug": "fresh-guacamole-chips",
+    "category": "Appetizers",
+    "dietary": "vegan",
+    "region": "Universal",
+    "createdAt": "2026-10-29T07:32:58.193Z"
+  },
+  {
+    "id": "target_crispy-street-tacos",
+    "name": "Crispy Street Tacos",
+    "universalSlug": "crispy-street-tacos",
+    "category": "Mains",
+    "dietary": "non-veg",
+    "region": "Universal",
+    "createdAt": "2026-10-29T07:32:58.193Z"
+  },
+  {
+    "id": "target_greek-salad",
+    "name": "Greek Salad",
+    "universalSlug": "greek-salad",
+    "category": "Appetizers",
+    "dietary": "veg",
+    "region": "Universal",
+    "createdAt": "2026-10-29T07:32:58.193Z"
+  },
+  {
+    "id": "target_triple-decker-club-sandwich",
+    "name": "Triple Decker Club Sandwich",
+    "universalSlug": "triple-decker-club-sandwich",
+    "category": "Mains",
+    "dietary": "non-veg",
+    "region": "Universal",
+    "createdAt": "2026-10-29T07:32:58.193Z"
+  },
+  {
+    "id": "target_tom-yum-soup",
+    "name": "Tom Yum Soup",
+    "universalSlug": "tom-yum-soup",
+    "category": "Appetizers",
+    "dietary": "non-veg",
+    "region": "Universal",
+    "createdAt": "2026-10-29T07:32:58.193Z"
+  },
+  {
+    "id": "target_mango-smoothie",
+    "name": "Mango Smoothie",
+    "universalSlug": "mango-smoothie",
+    "category": "Beverages",
+    "dietary": "veg",
+    "region": "Universal",
+    "createdAt": "2026-10-29T07:32:58.193Z"
+  },
+  {
+    "id": "target_butter-croissant",
+    "name": "Butter Croissant",
+    "universalSlug": "butter-croissant",
+    "category": "Sides",
+    "dietary": "veg",
+    "region": "Universal",
+    "createdAt": "2026-10-29T07:32:58.193Z"
+  }
+]

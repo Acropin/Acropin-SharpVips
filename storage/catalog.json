@@ -1,5 +1,92 @@
 [
   {
+    "id": "asset_tiramisu_1",
+    "universalName": "tiramisu",
+    "filename": "tiramisu.webp",
+    "dishName": "Classic Tiramisu",
+    "canonicalDishId": "dish_tiramisu",
+    "storageKey": "food-assets/tiramisu/480.webp",
+    "publicUrl": "/api/images/food-assets/tiramisu/480.webp",
+    "sha256Hash": "dummyhash3",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 28000,
+    "sourceProvider": "Test Provider",
+    "licenseType": "CC0",
+    "licenseEvidence": "Test Evidence",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-29T07:43:56.382Z",
+    "updatedAt": "2026-10-29T07:43:56.382Z",
+    "tags": [
+      "fixture"
+    ]
+  },
+  {
+    "id": "asset_paneer_butter_masala_1",
+    "universalName": "paneer-butter-masala",
+    "filename": "paneer-butter-masala.webp",
+    "dishName": "Paneer Butter Masala",
+    "canonicalDishId": "dish_paneer_butter_masala",
+    "storageKey": "food-assets/paneer-butter-masala/480.webp",
+    "publicUrl": "/api/images/food-assets/paneer-butter-masala/480.webp",
+    "sha256Hash": "dummyhash1",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 25000,
+    "sourceProvider": "Test Provider",
+    "licenseType": "CC0",
+    "licenseEvidence": "Test Evidence",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-29T07:43:56.382Z",
+    "updatedAt": "2026-10-29T07:43:56.382Z",
+    "tags": [
+      "fixture"
+    ]
+  },
+  {
+    "id": "asset_margherita_pizza_1",
+    "universalName": "margherita-pizza",
+    "filename": "margherita-pizza.webp",
+    "dishName": "Margherita Pizza",
+    "canonicalDishId": "dish_margherita_pizza",
+    "storageKey": "food-assets/margherita-pizza/480.webp",
+    "publicUrl": "/api/images/food-assets/margherita-pizza/480.webp",
+    "sha256Hash": "dummyhash2",
+    "width": 480,
+    "height": 480,
+    "format": "webp",
+    "byteSize": 22000,
+    "sourceProvider": "Test Provider",
+    "licenseType": "CC0",
+    "licenseEvidence": "Test Evidence",
+    "processingVersion": "v1",
+    "processingQuality": 78,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "approvalStatus": "approved",
+    "createdAt": "2026-10-29T07:43:56.382Z",
+    "updatedAt": "2026-10-29T07:43:56.382Z",
+    "tags": [
+      "fixture"
+    ]
+  },
+  {
     "id": "asset_classic-cheeseburger",
     "universalName": "classic-cheeseburger",
     "filename": "classic-cheeseburger.webp",
@@ -27,37 +114,6 @@
     "updatedAt": "2026-10-28T14:43:13.867Z",
     "tags": [
       "classic-cheeseburger",
-      "open-source-url"
-    ]
-  },
-  {
-    "id": "asset_margherita-pizza",
-    "universalName": "margherita-pizza",
-    "filename": "margherita-pizza.webp",
-    "dishName": "Margherita Pizza",
-    "storageKey": "food-assets/margherita-pizza/480.webp",
-    "publicUrl": "/api/images/food-assets/margherita-pizza/480.webp",
-    "sha256Hash": "c8063fe1c53909ae173a36e94173c841d77e06db5a75c1dead060966dcbea99d",
-    "width": 480,
-    "height": 480,
-    "format": "webp",
-    "originalByteSize": 113804,
-    "byteSize": 40198,
-    "sourceUrl": "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=1000&auto=format&fit=crop&q=80",
-    "sourceProvider": "images.unsplash.com",
-    "licenseType": "CC0",
-    "licenseEvidence": "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=1000&auto=format&fit=crop&q=80",
-    "processingVersion": "v1",
-    "processingQuality": 72,
-    "focalPoint": {
-      "x": 0.5,
-      "y": 0.5
-    },
-    "approvalStatus": "approved",
-    "createdAt": "2026-10-28T14:42:01.782Z",
-    "updatedAt": "2026-10-28T14:42:01.782Z",
-    "tags": [
-      "margherita-pizza",
       "open-source-url"
     ]
   }

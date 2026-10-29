@@ -32,23 +32,74 @@ export interface ImageProcessingOptions {
 }
 
 export interface ProcessedImageResult {
-  buffer: Buffer;
+  buffer: Buffer; // Primary 480x480
   hash: string; // SHA-256
-  width: number;
-  height: number;
+  width: number; // 480
+  height: number; // 480
   format: 'webp';
   byteSize: number;
   focalPoint: FocalPoint;
   qualityUsed: number;
   sizeDeviationWarning?: string;
   sourceDimensions: { width: number; height: number };
+  // Compact 128x128 resolution thumbnail
+  thumbnailBuffer: Buffer;
+  thumbnailWidth: number; // 128
+  thumbnailHeight: number; // 128
+  thumbnailByteSize: number;
+  thumbnailHash: string;
+  // 960x960 Retina / Medium display
+  retinaBuffer?: Buffer;
+  retinaWidth?: number; // 960
+  retinaHeight?: number; // 960
+  retinaByteSize?: number;
+  // 1600x1600 Full High-Res display
+  hiResBuffer?: Buffer;
+  hiResWidth?: number; // 1600
+  hiResHeight?: number; // 1600
+  hiResByteSize?: number;
+}
+
+export interface MlInspectionResult {
+  isFood: boolean;
+  matchesTargetDish: boolean;
+  detectedDish: string;
+  cuisine?: string;
+  qualityScore: number; // 0 - 100
+  antiCorruptionPassed: boolean;
+  rejectionReason?: string;
+  reasoning?: string;
+  modelUsed: string;
+  inspectedAt: string;
+}
+
+export interface AcropinMetadataTags {
+  publisher: string;
+  universalName: string;
+  cleanExif: boolean;
+  schemaVersion: string;
+  variantsAvailable: string[];
+  license: string;
+  contributorGitHub?: string;
+  dcoSignOff?: string;
+  mlVerified: boolean;
+  timestamp: string;
 }
 
 export interface ImageAsset {
   id: string; // unique asset ID
   canonicalDishId?: string;
-  storageKey: string; // food-assets/{assetId}/v1/480.webp
-  publicUrl: string; // stable public delivery URL
+  storageKey: string; // food-assets/{assetId}/480.webp
+  publicUrl: string; // stable public delivery URL (480x480)
+  thumbnailStorageKey?: string; // food-assets/{assetId}/128.webp
+  thumbnailUrl?: string; // stable public thumbnail URL (128x128)
+  thumbnailByteSize?: number;
+  retinaStorageKey?: string; // food-assets/{assetId}/960.webp
+  retinaUrl?: string; // stable public retina URL (960x960)
+  retinaByteSize?: number;
+  hiResStorageKey?: string; // food-assets/{assetId}/1600.webp
+  hiResUrl?: string; // stable public full-res URL (1600x1600)
+  hiResByteSize?: number;
   sha256Hash: string;
   width: number; // 480
   height: number; // 480
@@ -71,6 +122,26 @@ export interface ImageAsset {
   universalName: string; // clean universal slug, e.g. "margherita-pizza"
   filename: string; // default single name format, e.g. "margherita-pizza.webp"
   originalByteSize?: number;
+  // Contributor DCO & GitHub Info
+  contributorGitHub?: string;
+  contributorDcoEmail?: string;
+  dcoSignOff?: string;
+  // Real-time ML Anti-Corruption Verification
+  mlInspection?: MlInspectionResult;
+  // Acropin Universal Metadata Tag System
+  acropinMetadata?: AcropinMetadataTags;
+}
+
+export interface DatasetTargetItem {
+  id: string;
+  name: string;
+  universalSlug: string;
+  region: string; // e.g. 'North Indian', 'South Indian', 'Pan-Indian', 'Italian', 'Global'
+  category: string;
+  dietary: DishDietary;
+  ingredients?: string[];
+  notes?: string;
+  createdAt: string;
 }
 
 export interface CanonicalDish {
