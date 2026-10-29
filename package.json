@@ -1,5 +1,5 @@
 {
-  "name": "react-example",
+  "name": "acropin-sharpvips",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -19,7 +19,7 @@
     "cloudflare:deploy": "npm run build && wrangler deploy",
     "cloudflare:migrate": "wrangler d1 migrations apply acropin-food-catalog --remote",
     "cloudflare:sync": "node --import tsx scripts/sync-cloudflare-catalog.ts",
-    "test": "npx --yes tsx --test src/**/*.test.ts",
+    "test": "NODE_ENV=test node --import tsx --test src/lib/catalog/matcher.test.ts src/lib/images/process-image.test.ts src/lib/import/dataset-target-import.test.ts src/lib/import/menu-importer.test.ts src/lib/server/catalog-store.test.ts src/lib/server/contributor-rewards.test.ts src/lib/server/image-authorization.test.ts src/lib/server/ml-anti-corruption.test.ts src/lib/server/remote-image.test.ts src/lib/storage/image-storage.test.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "prelint": "npm run build:food-images",
@@ -30,7 +30,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@vercel/blob": "^2.3.0",
     "@vitejs/plugin-react": "^6.1.1",
-    "acropin-food-images": "^0.1.0",
+    "acropin-food-images": "^0.2.0",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "lucide-react": "^0.546.0",
@@ -39,7 +39,8 @@
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "sharp": "^0.35.5",
-    "vite": "^8.3.0"
+    "vite": "^8.3.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261028.1",

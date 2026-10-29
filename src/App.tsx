@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import chefHatLogo from './assets/chef-hat-logo.png';
 import {
   Upload,
   Link as LinkIcon,
@@ -17,7 +18,6 @@ import {
   Download,
   RefreshCw,
   Sliders,
-  UtensilsCrossed,
   Check,
   Trash2,
   Search,
@@ -29,21 +29,24 @@ import {
   Database,
   ShieldCheck,
   ShieldAlert,
-  GitCommit,
+  Github,
   User,
   Table as TableIcon,
   Clock,
   Eye,
   FileSpreadsheet,
+  X,
+  Trophy,
 } from 'lucide-react';
 import type { ImageAsset, MlInspectionResult } from './lib/images/types';
 import type { InventoryTableRow } from './lib/server/dataset-target-store';
-import { toUniversalFoodName } from './lib/images/universal-naming';
-import { apiFetch } from './lib/client/api';
+import { apiFetch, setAdminToken } from './lib/client/api';
 import { InventoryExcelTable } from './components/InventoryExcelTable';
 import { ReviewQueueView } from './components/ReviewQueueView';
 import { MetadataInspectorModal } from './components/MetadataInspectorModal';
 import { VariantPreviewModal } from './components/VariantPreviewModal';
+import { ContributorAccessPanel } from './components/ContributorAccessPanel';
+import { ContributorLeaderboard } from './components/ContributorLeaderboard';
 
 interface ProcessResponse {
   asset: ImageAsset;
@@ -62,8 +65,63 @@ interface DatasetResponse {
   rows: InventoryTableRow[];
 }
 
+type ContributionLicense = '' | 'CC0' | 'CC-BY-4.0';
+const MAX_UPLOAD_BYTES = 3.5 * 1024 * 1024;
+type AccessState = 'checking' | 'required' | 'unconfigured' | 'authenticated' | 'blocked' | 'unavailable';
+
+function readContributorGitHub(): string {
+  try {
+    const saved = window.localStorage.getItem('acropin_contributor_github') || '';
+    return saved === 'acropin-contributor' ? '' : saved;
+  } catch {
+    return '';
+  }
+}
+
+function saveContributorGitHub(value: string): void {
+  try {
+    if (value) window.localStorage.setItem('acropin_contributor_github', value);
+    else window.localStorage.removeItem('acropin_contributor_github');
+    window.localStorage.removeItem('acropin_contributor_email');
+  } catch {
+    // Browser storage can be unavailable in private or embedded browsing contexts.
+  }
+}
+
+interface GitHubContributor {
+  id: string;
+  login: string;
+  name?: string;
+  avatarUrl: string;
+  profileUrl: string;
+  accessStatus: 'active' | 'blocked';
+  contributionCount: number;
+}
+
+interface AuthStatusResponse {
+  required: boolean;
+  configured: boolean;
+  authenticated: boolean;
+  administrator?: boolean;
+  githubConfigured?: boolean;
+  dailyContributionLimit?: number;
+  contributor?: GitHubContributor | null;
+}
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'inventory' | 'processor' | 'queue' | 'assets'>('inventory');
+  const [accessState, setAccessState] = useState<AccessState>('checking');
+  const [adminAccessCode, setAdminAccessCode] = useState('');
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const [adminAccessRequired, setAdminAccessRequired] = useState(false);
+  const [adminAccessConfigured, setAdminAccessConfigured] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [githubConfigured, setGithubConfigured] = useState(false);
+  const [contributorDailyLimit, setContributorDailyLimit] = useState(3);
+  const [currentContributor, setCurrentContributor] = useState<GitHubContributor | null>(null);
+  const [showSignInModal, setShowSignInModal] = useState(false);
+  const [signInModalMessage, setSignInModalMessage] = useState<string | null>(null);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'inventory' | 'processor' | 'queue' | 'assets' | 'contributors' | 'leaderboard'>('inventory');
   const [inputMode, setInputMode] = useState<'upload' | 'url'>('upload');
 
   // File & URL state
@@ -71,23 +129,15 @@ export default function App() {
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string>('');
 
-  // Naming state (universal food slug)
-  const [dishTitle, setDishTitle] = useState<string>('');
-  const [universalSlug, setUniversalSlug] = useState<string>('');
-  const [isSlugManuallyEdited, setIsSlugManuallyEdited] = useState<boolean>(false);
+  // Dish identity always comes from the imported menu inventory.
+  const [selectedTargetId, setSelectedTargetId] = useState('');
 
-  // Contributor DCO & GitHub Sign-Off State
-  const [contributorGitHub, setContributorGitHub] = useState<string>(() => {
-    return localStorage.getItem('acropin_contributor_github') || 'acropin-contributor';
-  });
-  const [contributorDcoEmail, setContributorDcoEmail] = useState<string>(() => {
-    return localStorage.getItem('acropin_contributor_email') || 'contributor@acropin.org';
-  });
+  // Contributor and rights metadata
+  const [contributorGitHub, setContributorGitHub] = useState<string>(readContributorGitHub);
+  const [licenseType, setLicenseType] = useState<ContributionLicense>('');
+  const [requiredAttribution, setRequiredAttribution] = useState('');
+  const [rightsAttested, setRightsAttested] = useState(false);
   const [submitDirect, setSubmitDirect] = useState<boolean>(false);
-
-  // ML Pre-check state
-  const [mlPreCheck, setMlPreCheck] = useState<MlInspectionResult | null>(null);
-  const [isMlChecking, setIsMlChecking] = useState<boolean>(false);
 
   // Focal point
   const [focalX, setFocalX] = useState<number>(0.5);
@@ -101,6 +151,9 @@ export default function App() {
   // Inventory Table state
   const [datasetData, setDatasetData] = useState<DatasetResponse | null>(null);
   const [isLoadingDataset, setIsLoadingDataset] = useState<boolean>(false);
+  const selectedTarget = datasetData?.rows.find((row) => row.id === selectedTargetId);
+  const dishTitle = selectedTarget?.name ?? '';
+  const universalSlug = selectedTarget?.universalSlug ?? '';
 
   // Review Queue state
   const [pendingAssets, setPendingAssets] = useState<ImageAsset[]>([]);
@@ -117,20 +170,101 @@ export default function App() {
   // Drag and drop
   const [isDragOver, setIsDragOver] = useState(false);
 
+  const refreshAuthStatus = useCallback(async (): Promise<AuthStatusResponse> => {
+    const response = await apiFetch('/api/auth/status');
+    if (!response.ok) throw new Error('Could not check dashboard access.');
+    const status = await response.json() as AuthStatusResponse;
+    setAdminAccessRequired(status.required);
+    setAdminAccessConfigured(status.configured);
+    setGithubConfigured(Boolean(status.githubConfigured));
+    setContributorDailyLimit(status.dailyContributionLimit || 3);
+    setCurrentContributor(status.contributor || null);
+    if (status.administrator) {
+      setIsAdmin(true);
+      setAccessState('authenticated');
+    } else if (status.contributor?.accessStatus === 'active') {
+      setIsAdmin(false);
+      setAccessState('authenticated');
+    } else if (status.contributor?.accessStatus === 'blocked') {
+      setIsAdmin(false);
+      setAccessState('blocked');
+    } else if (status.required && !status.configured && !status.githubConfigured) {
+      setIsAdmin(false);
+      setAccessState('unconfigured');
+      setActiveTab((tab) => tab === 'inventory' ? 'assets' : tab);
+    } else {
+      setIsAdmin(false);
+      setAdminToken(null);
+      setAccessState('required');
+      setActiveTab((tab) => tab === 'inventory' ? 'assets' : tab);
+    }
+    return status;
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    refreshAuthStatus().catch(() => {
+        if (!cancelled) setAccessState('unavailable');
+      });
+    return () => { cancelled = true; };
+  }, [refreshAuthStatus]);
+
+  useEffect(() => {
+    const handleOAuthMessage = (data: unknown) => {
+      if (!data || typeof data !== 'object') return;
+      const message = data as { type?: unknown; result?: unknown; message?: unknown };
+      if (message.type !== 'acropin-github-oauth') return;
+      if (message.result === 'sign-in-failed') {
+        setSignInModalMessage(typeof message.message === 'string'
+          ? message.message
+          : 'GitHub could not complete sign-in. Close this dialog and try again.');
+        return;
+      }
+
+      void refreshAuthStatus().then((status) => {
+        setShowSignInModal(false);
+        setSignInModalMessage(null);
+        if (status.contributor?.accessStatus === 'active' || status.administrator) {
+          setAuthNotice(`Signed in${status.contributor ? ` as @${status.contributor.login}` : ''}. Your selected image and form are still here; continue when ready.`);
+        } else if (status.contributor?.accessStatus === 'blocked') {
+          setAuthNotice('This GitHub account is blocked from submitting images. Contact the library owner for help.');
+        }
+      }).catch(() => setSignInModalMessage('Sign-in finished, but access could not be refreshed. Reload this page and try again.'));
+    };
+    const handleWindowMessage = (event: MessageEvent<unknown>) => {
+      if (event.origin !== window.location.origin) return;
+      handleOAuthMessage(event.data);
+    };
+    window.addEventListener('message', handleWindowMessage);
+    const authChannel = 'BroadcastChannel' in window ? new BroadcastChannel('acropin-auth') : null;
+    authChannel?.addEventListener('message', (event: MessageEvent<unknown>) => handleOAuthMessage(event.data));
+    return () => {
+      window.removeEventListener('message', handleWindowMessage);
+      authChannel?.close();
+    };
+  }, [refreshAuthStatus]);
+
+  useEffect(() => {
+    return () => {
+      if (filePreview) URL.revokeObjectURL(filePreview);
+    };
+  }, [filePreview]);
+
   // Save contributor settings to localStorage
   useEffect(() => {
-    if (contributorGitHub) localStorage.setItem('acropin_contributor_github', contributorGitHub);
-    if (contributorDcoEmail) localStorage.setItem('acropin_contributor_email', contributorDcoEmail);
-  }, [contributorGitHub, contributorDcoEmail]);
+    saveContributorGitHub(contributorGitHub);
+  }, [contributorGitHub]);
 
   // Load Inventory Dataset
   const fetchDataset = useCallback(async () => {
     setIsLoadingDataset(true);
     try {
-      const res = await apiFetch('/api/dataset/targets');
+      const res = await apiFetch('/api/dataset/targets', { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         setDatasetData(data);
+      } else {
+        console.error('Failed to load dataset targets:', await res.text());
       }
     } catch (err) {
       console.error('Failed to load dataset targets:', err);
@@ -138,6 +272,24 @@ export default function App() {
       setIsLoadingDataset(false);
     }
   }, []);
+
+  // Keep already-open contributor inventories in sync with owner imports.
+  useEffect(() => {
+    if (accessState !== 'authenticated' || activeTab !== 'inventory') return;
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void fetchDataset();
+    };
+    const timer = window.setInterval(refreshWhenVisible, 30_000);
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [accessState, activeTab, fetchDataset]);
 
   // Load Review Queue
   const fetchReviewQueue = useCallback(async () => {
@@ -169,27 +321,43 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    fetchDataset();
-    fetchReviewQueue();
+    if (accessState === 'checking' || accessState === 'unavailable') return;
     fetchCatalog();
-  }, [fetchDataset, fetchReviewQueue, fetchCatalog]);
-
-  // Auto-generate universal slug on dishTitle change
-  const handleDishTitleChange = (val: string) => {
-    setDishTitle(val);
-    if (!isSlugManuallyEdited) {
-      setUniversalSlug(toUniversalFoodName(val).universalName);
+    if (accessState === 'authenticated') {
+      fetchDataset();
+      if (isAdmin) fetchReviewQueue();
+      else setPendingAssets([]);
+    } else {
+      setDatasetData(null);
+      setPendingAssets([]);
     }
-  };
+  }, [accessState, isAdmin, fetchDataset, fetchReviewQueue, fetchCatalog]);
 
-  // Pre-load a dish from the Excel table into the processor
+  // A CSV/menu row is the single source of dish name and slug.
   const handleSelectForContribution = (row: InventoryTableRow) => {
-    setDishTitle(row.name);
-    setUniversalSlug(row.universalSlug);
-    setIsSlugManuallyEdited(true);
+    setSelectedTargetId(row.id);
     setLastResult(null);
     setErrorMessage(null);
     setActiveTab('processor');
+  };
+
+  const selectImageFile = (selected: File) => {
+    if (selected.size > MAX_UPLOAD_BYTES) {
+      setErrorMessage('Choose an image smaller than 3.5 MB. The hosted Vercel upload endpoint has a 4.5 MB request limit.');
+      return;
+    }
+    if (!selected.type.startsWith('image/')) {
+      setErrorMessage('Choose a supported image file.');
+      return;
+    }
+    setErrorMessage(null);
+    setFile(selected);
+    setFilePreview(URL.createObjectURL(selected));
+    setInputMode('upload');
+    if (accessState === 'required' || accessState === 'unconfigured') {
+      setSignInModalMessage('Sign in before submitting. Your selected image will stay on this page.');
+      setShowSignInModal(true);
+    }
   };
 
   // Drag and drop handling
@@ -197,58 +365,30 @@ export default function App() {
     e.preventDefault();
     setIsDragOver(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const selected = e.dataTransfer.files[0];
-      setFile(selected);
-      setFilePreview(URL.createObjectURL(selected));
-      setInputMode('upload');
-      if (!dishTitle) {
-        const rawName = selected.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
-        handleDishTitleChange(rawName);
-      }
+      selectImageFile(e.dataTransfer.files[0]);
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const selected = e.target.files[0];
-      setFile(selected);
-      setFilePreview(URL.createObjectURL(selected));
-      if (!dishTitle) {
-        const rawName = selected.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
-        handleDishTitleChange(rawName);
-      }
-    }
-  };
-
-  // Pre-check ML when an image is ready
-  const runPreCheck = async () => {
-    if (!file && !imageUrl) return;
-    setIsMlChecking(true);
-    try {
-      const formData = new FormData();
-      if (file) formData.append('image', file);
-      if (imageUrl) formData.append('imageUrl', imageUrl);
-      formData.append('dishName', dishTitle || 'Food Item');
-      formData.append('universalSlug', universalSlug);
-
-      const res = await apiFetch('/api/ml/inspect', {
-        method: 'POST',
-        body: formData,
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setMlPreCheck(data.mlInspection);
-      }
-    } catch {
-      // Non-blocking pre-check
-    } finally {
-      setIsMlChecking(false);
+      selectImageFile(e.target.files[0]);
     }
   };
 
   // Process & Submit Image
   const handleProcessAndSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (accessState !== 'authenticated') {
+      if (accessState === 'required' || accessState === 'unconfigured') {
+        setSignInModalMessage('Sign in before submitting. Your selected image and form details will stay on this page.');
+        setShowSignInModal(true);
+      } else if (accessState === 'blocked') {
+        setErrorMessage('This GitHub account cannot submit images. Contact the library owner for help.');
+      } else {
+        setErrorMessage('The sign-in service is unavailable. Try again in a moment.');
+      }
+      return;
+    }
     if (inputMode === 'upload' && !file) {
       setErrorMessage('Please drop or select an image file.');
       return;
@@ -257,8 +397,16 @@ export default function App() {
       setErrorMessage('Please enter an image URL.');
       return;
     }
-    if (!dishTitle.trim()) {
-      setErrorMessage('Please provide the food dish name.');
+    if (!selectedTarget || selectedTarget.status !== 'missing') {
+      setErrorMessage('Choose a missing dish from the imported menu inventory first.');
+      return;
+    }
+    if (!licenseType || !rightsAttested) {
+      setErrorMessage('Select a license and confirm you have the right to share this image.');
+      return;
+    }
+    if (licenseType === 'CC-BY-4.0' && !requiredAttribution.trim()) {
+      setErrorMessage('Attribution text is required for CC-BY-4.0 images.');
       return;
     }
 
@@ -276,9 +424,10 @@ export default function App() {
         formData.append('focalPointX', String(focalX));
         formData.append('focalPointY', String(focalY));
         formData.append('contributorGitHub', contributorGitHub);
-        formData.append('contributorDcoEmail', contributorDcoEmail);
         formData.append('submitDirect', String(submitDirect));
-        formData.append('licenseType', 'CC0');
+        formData.append('licenseType', licenseType);
+        formData.append('requiredAttribution', requiredAttribution);
+        formData.append('rightsAttested', String(rightsAttested));
 
         res = await apiFetch('/api/images/upload', {
           method: 'POST',
@@ -295,9 +444,10 @@ export default function App() {
             focalPointX: focalX,
             focalPointY: focalY,
             contributorGitHub,
-            contributorDcoEmail,
             submitDirect,
-            licenseType: 'CC0',
+            licenseType,
+            requiredAttribution,
+            rightsAttested,
           }),
         });
       }
@@ -310,7 +460,7 @@ export default function App() {
       setLastResult(data);
       // Refresh inventory and queue
       fetchDataset();
-      fetchReviewQueue();
+      if (isAdmin) fetchReviewQueue();
       fetchCatalog();
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : String(err));
@@ -357,9 +507,13 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rawText }),
     });
-    if (res.ok) {
-      fetchDataset();
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({})) as { error?: string };
+      throw new Error(body.error || `Import failed with status ${res.status}.`);
     }
+    const body = await res.json() as { datasetStatus?: DatasetResponse };
+    if (body.datasetStatus) setDatasetData(body.datasetStatus);
+    else await fetchDataset();
   };
 
   // Add Target Dish
@@ -374,86 +528,248 @@ export default function App() {
     }
   };
 
+  const handleAdminLogin = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAccessError(null);
+    setAdminToken(adminAccessCode);
+    try {
+      const response = await apiFetch('/api/auth/status');
+      const status = await response.json() as AuthStatusResponse;
+      setAdminAccessRequired(status.required);
+      setAdminAccessConfigured(status.configured);
+      if (!status.configured) {
+        setAdminToken(null);
+        setAccessState('unconfigured');
+      } else if (!status.administrator) {
+        setAdminToken(null);
+        setAccessError('That access code was not accepted. Check it and try again.');
+        setAccessState('required');
+      } else {
+        setIsAdmin(true);
+        setCurrentContributor(null);
+        setAdminAccessCode('');
+        setAccessState('authenticated');
+        setShowSignInModal(false);
+        setSignInModalMessage(null);
+      }
+    } catch {
+      setAdminToken(null);
+      setAccessError('Could not reach the dashboard API. Check the deployment and try again.');
+    }
+  };
+
+  const handleAdminLogout = () => {
+    setAdminToken(null);
+    setIsAdmin(false);
+    setCurrentContributor(null);
+    setAccessState('required');
+    setDatasetData(null);
+    setPendingAssets([]);
+    setCatalog([]);
+  };
+
+  const handleContributorLogout = async () => {
+    await apiFetch('/api/auth/github/logout', { method: 'POST' }).catch(() => undefined);
+    setAdminToken(null);
+    setCurrentContributor(null);
+    setIsAdmin(false);
+    setDatasetData(null);
+    setCatalog([]);
+    setAccessState('required');
+  };
+
+  const beginGitHubSignIn = () => {
+    setSignInModalMessage(null);
+    const popup = window.open(
+      '/api/auth/github',
+      'acropin-github-sign-in',
+      'popup,width=520,height=720,resizable,scrollbars'
+    );
+    if (!popup) {
+      setSignInModalMessage('Your browser blocked the sign-in popup. Allow popups for this site, then try again. Your image and form are still here.');
+      return;
+    }
+    popup.focus();
+  };
+
+  if (accessState === 'checking' || accessState === 'unavailable') {
+    return (
+      <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
+        <section className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-7 shadow-2xl">
+          <div className="mb-5 flex items-center gap-3">
+            <img src={chefHatLogo} alt="Acropin" className="h-11 w-11 object-contain" />
+            <div>
+              <h1 className="font-bold text-lg">Acropin Food Library</h1>
+              <p className="text-xs text-slate-400">Contributor and owner sign-in</p>
+            </div>
+          </div>
+          {accessState === 'checking' ? (
+            <p className="text-sm text-slate-300">Checking dashboard access…</p>
+          ) : (
+            <div className="space-y-3 text-sm text-rose-200">
+              <p>{accessError || 'The dashboard API is unavailable.'}</p>
+              <button onClick={() => window.location.reload()} className="rounded-lg bg-slate-800 px-3 py-2 text-xs text-slate-100">Try again</button>
+            </div>
+          )}
+        </section>
+      </main>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans antialiased">
       {/* Top Header */}
       <header className="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-sky-500 flex items-center justify-center text-white shadow-md">
-              <UtensilsCrossed className="w-5 h-5" />
-            </div>
-            <div>
+        <div className="max-w-7xl mx-auto w-full px-3 sm:px-6 lg:px-8 min-h-16 py-2 sm:py-0 flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between">
+          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+            <img src={chefHatLogo} alt="Acropin" className="h-10 w-10 shrink-0 object-contain" />
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h1 className="font-bold text-base text-slate-100 tracking-tight">Acropin</h1>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-mono font-semibold">
+                <span className="hidden sm:inline px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-mono font-semibold">
                   Universal Food Library
                 </span>
               </div>
-              <p className="text-xs text-slate-400">Excel-Grade Food Image Inventory & Multi-Tier Sharp Processor</p>
+              <p className="hidden md:block truncate text-xs text-slate-400">Food image library and contributor tools</p>
             </div>
           </div>
 
           {/* Navigation Tabs */}
-          <nav className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-medium">
+          <nav aria-label="Main navigation" className="flex max-w-full sm:w-auto overflow-x-auto items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-medium">
             <button
-              onClick={() => setActiveTab('inventory')}
-              className={`px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors ${
+              type="button"
+              aria-label="Inventory"
+              title="Inventory"
+              onClick={() => {
+                if (accessState === 'authenticated') setActiveTab('inventory');
+                else {
+                  setSignInModalMessage('Sign in to open contributor inventory and editing tools.');
+                  setShowSignInModal(true);
+                }
+              }}
+              className={`min-h-10 shrink-0 px-3 sm:px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors ${
                 activeTab === 'inventory'
                   ? 'bg-emerald-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
               }`}
             >
               <TableIcon className="w-3.5 h-3.5" />
-              <span>Excel Inventory</span>
+              <span className="hidden lg:inline">Inventory</span>
             </button>
 
             <button
+              type="button"
+              aria-label="Process and contribute"
+              title="Process and contribute"
               onClick={() => setActiveTab('processor')}
-              className={`px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors ${
+              className={`min-h-10 shrink-0 px-3 sm:px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors ${
                 activeTab === 'processor'
                   ? 'bg-sky-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
               }`}
             >
               <Upload className="w-3.5 h-3.5" />
-              <span>Process & Contribute</span>
+              <span className="hidden lg:inline">Contribute</span>
             </button>
 
-            <button
+            {isAdmin && <button
+              type="button"
+              aria-label="Review queue"
+              title="Review queue"
               onClick={() => setActiveTab('queue')}
-              className={`px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors ${
+              className={`min-h-10 shrink-0 px-3 sm:px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors ${
                 activeTab === 'queue'
                   ? 'bg-indigo-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
               }`}
             >
               <Clock className="w-3.5 h-3.5" />
-              <span>Review Queue</span>
+              <span className="hidden lg:inline">Review Queue</span>
               {pendingAssets.length > 0 && (
                 <span className="ml-0.5 px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 text-[10px] font-bold">
                   {pendingAssets.length}
                 </span>
               )}
-            </button>
+            </button>}
 
             <button
+              type="button"
+              aria-label="Catalog assets"
+              title="Catalog assets"
               onClick={() => setActiveTab('assets')}
-              className={`px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors ${
+              className={`min-h-10 shrink-0 px-3 sm:px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors ${
                 activeTab === 'assets'
                   ? 'bg-slate-800 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>Catalog Assets ({catalog.length})</span>
+              <span className="hidden lg:inline">Assets ({catalog.length})</span>
             </button>
+            <button
+              type="button"
+              aria-label="Contributor rewards"
+              title="Contributor rewards"
+              onClick={() => setActiveTab('leaderboard')}
+              className={`min-h-10 shrink-0 px-3 sm:px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors ${
+                activeTab === 'leaderboard'
+                  ? 'bg-emerald-700 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              }`}
+            >
+              <Trophy className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">Rewards</span>
+            </button>
+            {isAdmin && <button
+              type="button"
+              aria-label="Contributor access"
+              title="Contributor access"
+              onClick={() => setActiveTab('contributors')}
+              className={`min-h-10 shrink-0 px-3 sm:px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors ${
+                activeTab === 'contributors' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              }`}
+            >
+              <User className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">Contributors</span>
+            </button>}
           </nav>
+          {isAdmin && adminAccessRequired && (
+            <button
+              onClick={handleAdminLogout}
+              className="self-end sm:self-auto sm:ml-2 min-h-10 rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
+            >
+              Lock dashboard
+            </button>
+          )}
+          {!isAdmin && currentContributor && (
+            <button onClick={() => void handleContributorLogout()} className="self-end sm:self-auto sm:ml-2 min-h-10 rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800">
+              Sign out @{currentContributor.login}
+            </button>
+          )}
+          {(accessState === 'required' || accessState === 'unconfigured') && (
+            <button
+              onClick={() => { setSignInModalMessage(null); setShowSignInModal(true); }}
+              className="self-end sm:self-auto sm:ml-2 min-h-10 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500"
+            >
+              Sign in to contribute
+            </button>
+          )}
         </div>
       </header>
 
       {/* Main Content Body */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+        {authNotice && (
+          <div role="status" className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-emerald-800 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200">
+            <span>{authNotice}</span>
+            <button aria-label="Dismiss message" onClick={() => setAuthNotice(null)} className="shrink-0 text-emerald-200/80 hover:text-white"><X className="h-4 w-4" /></button>
+          </div>
+        )}
+        {accessState === 'blocked' && (
+          <div role="status" className="mb-4 rounded-lg border border-rose-800 bg-rose-950/40 px-4 py-3 text-sm text-rose-200">
+            This GitHub account cannot submit images. Contact the library owner if you think this is an error.
+          </div>
+        )}
         {/* TAB 1: EXCEL-LIKE SPREADSHEET INVENTORY */}
         {activeTab === 'inventory' && (
           <InventoryExcelTable
@@ -471,8 +787,13 @@ export default function App() {
             onDeleteTarget={handleDeleteTarget}
             onImportCsvOrExcel={handleImportCsvOrExcel}
             onAddTargetDish={handleAddTargetDish}
+            readOnly={!isAdmin}
           />
         )}
+
+        {activeTab === 'contributors' && isAdmin && <ContributorAccessPanel />}
+
+        {activeTab === 'leaderboard' && <ContributorLeaderboard />}
 
         {/* TAB 2: IMAGE PROCESSOR & CONTRIBUTOR DROP ZONE */}
         {activeTab === 'processor' && (
@@ -485,7 +806,7 @@ export default function App() {
                     Food Image Processing & Clean Metadata Stamper
                   </h2>
                   <p className="text-xs text-slate-400 mt-1">
-                    Converts any food image into 4 standard WebP variants (128px, 480px, 960px, 1600px), cleanly strips all external EXIF/camera metadata, and embeds Acropin universal tags.
+                    Creates a 128px thumbnail and 480px menu image. Larger 960px and 1600px versions are included when the source resolution supports them. Image content and redistribution rights require human review.
                   </p>
                 </div>
                 <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
@@ -556,7 +877,7 @@ export default function App() {
                             </label>
                           </p>
                           <p className="text-xs text-slate-500 mt-1">
-                            Supports JPEG, PNG, WebP, AVIF, TIFF up to 15 MB. Generated from ChatGPT/DALL-E or open-source.
+                            Supports browser image formats up to 3.5 MB per file. Choose a license and confirm redistribution rights below.
                           </p>
                         </div>
                       </div>
@@ -564,12 +885,12 @@ export default function App() {
                   </div>
                 ) : (
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">Open-Source Image URL *</label>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Image URL *</label>
                     <div className="relative">
                       <LinkIcon className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         type="url"
-                        placeholder="https://example.com/food-dish.jpg"
+                        placeholder="HTTPS URL to the image"
                         value={imageUrl}
                         onChange={(e) => setImageUrl(e.target.value)}
                         className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs text-slate-200 focus:outline-hidden focus:border-sky-500"
@@ -578,72 +899,118 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Dish Name & Universal Identifier */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">Standard Dish Name *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Margherita Pizza"
-                      value={dishTitle}
-                      onChange={(e) => handleDishTitleChange(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-hidden focus:border-sky-500"
-                    />
+                {selectedTarget && (
+                  <div className="rounded-xl border border-sky-900/70 bg-sky-950/30 px-4 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-300">Suggested image-generation prompt</p>
+                    <p className="mt-1 break-words text-xs leading-relaxed text-slate-200">
+                      {`Award-winning commercial cuisine and product photograph of ${selectedTarget.name}${selectedTarget.dietary !== 'unknown' ? ` (${selectedTarget.dietary})` : ''}, professional studio lighting, shallow depth of field, 8k resolution, crisp detail, gourmet restaurant menu presentation, clean minimalist background, photorealistic style, no text, no watermark.`}
+                    </p>
                   </div>
+                )}
 
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Universal Identifier Slug (Auto-Derived)
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        required
-                        value={universalSlug}
-                        onChange={(e) => {
-                          setUniversalSlug(e.target.value);
-                          setIsSlugManuallyEdited(true);
-                        }}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-emerald-400 focus:outline-hidden focus:border-sky-500"
-                      />
+                {/* Dish identity comes from a selected imported menu row. */}
+                <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Selected menu item</p>
+                      {selectedTarget ? (
+                        <>
+                          <p className="mt-1 truncate text-sm font-semibold text-slate-100">{selectedTarget.name}</p>
+                          <p className="mt-0.5 font-mono text-[11px] text-emerald-400">{selectedTarget.universalSlug}</p>
+                          <p className="mt-1 text-[11px] text-slate-500">{selectedTarget.category}{selectedTarget.region ? ` · ${selectedTarget.region}` : ''}</p>
+                        </>
+                      ) : (
+                        <p className="mt-1 text-xs text-slate-400">Import your menu CSV, then choose a missing dish from Menu Inventory.</p>
+                      )}
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('inventory')}
+                      className="min-h-9 shrink-0 rounded-lg border border-slate-700 px-3 text-xs font-medium text-sky-300 hover:bg-slate-800"
+                    >
+                      {selectedTarget ? 'Change dish' : 'Open Menu Inventory'}
+                    </button>
                   </div>
                 </div>
 
-                {/* Contributor DCO & Sign-Off */}
+                {/* Contributor and rights metadata */}
                 <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
                   <div className="flex items-center justify-between text-xs font-medium text-slate-300">
                     <span className="flex items-center gap-1.5 text-slate-200">
                       <User className="w-4 h-4 text-sky-400" />
-                      Contributor Identity & Developer Certificate of Origin (DCO)
+                      Contributor and redistribution rights
                     </span>
-                    <span className="text-[11px] text-emerald-400 font-mono">Clean EXIF Guarantee</span>
+                    <span className="text-[11px] text-slate-400">Reviewed before public release</span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                     <div>
-                      <label className="block text-[11px] text-slate-400 mb-1">GitHub Username</label>
-                      <input
-                        type="text"
-                        value={contributorGitHub}
-                        onChange={(e) => setContributorGitHub(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-hidden"
-                      />
+                      <label className="block text-[11px] text-slate-400 mb-1">GitHub contributor</label>
+                      {currentContributor ? (
+                        <div className="flex min-h-9 items-center gap-2 rounded-lg border border-slate-800 bg-slate-900 px-3 text-xs text-slate-200">
+                          <img src={currentContributor.avatarUrl} alt="" className="h-5 w-5 rounded-full" />
+                          <a href={currentContributor.profileUrl} target="_blank" rel="noreferrer" className="text-sky-300 hover:underline">@{currentContributor.login}</a>
+                          <span className="ml-auto text-[10px] text-emerald-300">Verified</span>
+                        </div>
+                      ) : (
+                        <input
+                          type="text"
+                          value={contributorGitHub}
+                          onChange={(e) => setContributorGitHub(e.target.value)}
+                          placeholder="GitHub username"
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-hidden"
+                        />
+                      )}
                     </div>
                     <div>
-                      <label className="block text-[11px] text-slate-400 mb-1">DCO Sign-Off Email</label>
-                      <input
-                        type="email"
-                        value={contributorDcoEmail}
-                        onChange={(e) => setContributorDcoEmail(e.target.value)}
+                      <label htmlFor="contribution-license" className="block text-[11px] text-slate-400 mb-1">License *</label>
+                      <select
+                        id="contribution-license"
+                        value={licenseType}
+                        onChange={(e) => setLicenseType(e.target.value as ContributionLicense)}
+                        required
                         className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-hidden"
-                      />
+                      >
+                        <option value="">Select a license</option>
+                        <option value="CC0">CC0-1.0</option>
+                        <option value="CC-BY-4.0">CC-BY-4.0</option>
+                      </select>
                     </div>
                   </div>
 
+                  <p className="text-[11px] leading-relaxed text-slate-500">No source or proof links are needed here. Choose the license you can grant and confirm the rights checkbox; reviewers can still reject submissions that do not meet the library license rules.</p>
+
+                  {licenseType === 'CC-BY-4.0' && (
+                    <div>
+                      <label className="block text-[11px] text-slate-400 mb-1">Required attribution *</label>
+                      <input
+                        type="text"
+                        value={requiredAttribution}
+                        onChange={(e) => setRequiredAttribution(e.target.value)}
+                        placeholder="Creator, title, source, and license"
+                        required
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-hidden"
+                      />
+                    </div>
+                  )}
+
+                  <label className="flex items-start gap-2 text-xs text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={rightsAttested}
+                      onChange={(e) => setRightsAttested(e.target.checked)}
+                      required
+                      className="mt-0.5 rounded border-slate-700 text-emerald-500 focus:ring-0"
+                    />
+                    <span>I created this image or have permission to redistribute it under the selected license.</span>
+                  </label>
+
+                  {!isAdmin && <p className="border-t border-slate-800/80 pt-3 text-[11px] leading-relaxed text-amber-200/80">
+                    Each dish name can have one active submission. A pending or published dish is locked against repeat uploads; an administrator can reopen it if a submission is rejected. Limit: {contributorDailyLimit} unique dishes per UTC day.
+                  </p>}
+
                   {/* Submission target choice */}
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-800/80">
+                  {isAdmin && <div className="flex items-center justify-between pt-2 border-t border-slate-800/80">
                     <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
                       <input
                         type="checkbox"
@@ -651,12 +1018,12 @@ export default function App() {
                         onChange={(e) => setSubmitDirect(e.target.checked)}
                         className="rounded border-slate-700 text-emerald-500 focus:ring-0"
                       />
-                      <span>Direct Commit (Organizer/Admin direct publish to active database)</span>
+                      <span>Approve immediately (admin only)</span>
                     </label>
                     <span className="text-[11px] text-slate-500">
                       {submitDirect ? 'Immediate live status' : 'Enters Review Queue'}
                     </span>
-                  </div>
+                  </div>}
                 </div>
 
                 {errorMessage && (
@@ -670,13 +1037,20 @@ export default function App() {
                 <div className="flex items-center justify-end gap-3 pt-2">
                   <button
                     type="submit"
+                    onClick={(event) => {
+                      if (accessState === 'required' || accessState === 'unconfigured') {
+                        event.preventDefault();
+                        setSignInModalMessage('Sign in to submit this contribution. Your image and form details are saved in this page.');
+                        setShowSignInModal(true);
+                      }
+                    }}
                     disabled={isProcessing}
                     className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-sky-950/50 flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
                   >
                     {isProcessing ? (
                       <>
                         <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Generating 4 Variants & Sanitizing EXIF...</span>
+                        <span>Processing image and sanitizing metadata…</span>
                       </>
                     ) : (
                       <>
@@ -695,7 +1069,7 @@ export default function App() {
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                   <div className="flex items-center gap-2 text-emerald-400 font-semibold text-sm">
                     <CheckCircle2 className="w-5 h-5" />
-                    <span>Image Successfully Processed into 4 Standard WebP Variants!</span>
+                    <span>Image processed into {lastResult.asset.acropinMetadata?.variantsAvailable.length ?? 2} WebP sizes.</span>
                   </div>
                   <span className="text-xs font-mono text-slate-400">
                     Status:{' '}
@@ -743,7 +1117,7 @@ export default function App() {
                         onClick={() => setViewingVariantsAsset(lastResult.asset)}
                         className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-medium"
                       >
-                        Inspect & Download 4 Sizes
+                        Inspect & Download {lastResult.asset.acropinMetadata?.variantsAvailable.length ?? 2} Sizes
                       </button>
                       <button
                         onClick={() => setActiveTab('inventory')}
@@ -777,7 +1151,7 @@ export default function App() {
               <div>
                 <h2 className="text-base font-semibold text-slate-100">Live Food Image Asset Library</h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  High-fidelity WebP food assets delivered with immutable CDN caching headers.
+                  Approved WebP assets with short cache lifetimes so license revocations can take effect.
                 </p>
               </div>
               <div className="relative w-64">
@@ -811,7 +1185,7 @@ export default function App() {
                         className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-medium transition-opacity gap-1"
                       >
                         <Eye className="w-4 h-4" />
-                        4 Sizes
+                        {asset.acropinMetadata?.variantsAvailable.length ?? 2} Sizes
                       </button>
                     </div>
                     <div className="p-3 space-y-1">
@@ -844,6 +1218,57 @@ export default function App() {
 
       {viewingVariantsAsset && (
         <VariantPreviewModal asset={viewingVariantsAsset} onClose={() => setViewingVariantsAsset(null)} />
+      )}
+
+      {showSignInModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" role="presentation">
+          <button aria-label="Close sign-in dialog" className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={() => setShowSignInModal(false)} />
+          <section role="dialog" aria-modal="true" aria-labelledby="contributor-sign-in-title" className="relative z-10 w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl sm:p-6">
+            <button aria-label="Close" onClick={() => setShowSignInModal(false)} className="absolute right-3 top-3 rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"><X className="h-4 w-4" /></button>
+            <div className="mb-4 flex items-center gap-3 pr-8">
+              <img src={chefHatLogo} alt="Acropin" className="h-10 w-10 object-contain" />
+              <div>
+                <h2 id="contributor-sign-in-title" className="text-base font-semibold text-white">Sign in to contribute</h2>
+                <p className="text-xs text-slate-400">Your selected image stays on this page.</p>
+              </div>
+            </div>
+            {signInModalMessage && <p role="alert" className="mb-3 rounded-lg border border-amber-800 bg-amber-950/40 p-3 text-xs leading-relaxed text-amber-200">{signInModalMessage}</p>}
+            {accessState === 'blocked' ? (
+              <p className="text-sm text-rose-200">This GitHub account cannot submit images. Contact the library owner if you think this is an error.</p>
+            ) : (
+              <div className="space-y-4">
+                {githubConfigured ? (
+                  <button onClick={beginGitHubSignIn} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-white px-4 py-3 text-sm font-semibold text-slate-950 hover:bg-slate-100">
+                    <Github className="h-4 w-4" /> Continue with GitHub
+                  </button>
+                ) : (
+                  <div className="rounded-lg border border-amber-800 bg-amber-950/40 p-3 text-xs leading-relaxed text-amber-200">
+                    GitHub sign-in is not configured yet. The owner needs to create a GitHub OAuth App and add its client ID, client secret, callback URL, and session secret to this environment.
+                  </div>
+                )}
+                {githubConfigured && <p className="text-center text-xs text-slate-400">GitHub sign-in creates your profile and enables contributor tools immediately. Submitted images still need rights and content review before they are published.</p>}
+                {adminAccessRequired && !adminAccessConfigured && <p className="rounded-lg border border-amber-900/70 bg-amber-950/30 p-3 text-xs text-amber-200">Owner controls are unavailable until <code>ADMIN_API_TOKEN</code> is configured.</p>}
+                {adminAccessConfigured && <>
+                  <div className="border-t border-slate-800 pt-3 text-center text-[11px] uppercase tracking-wide text-slate-500">Owner sign-in</div>
+                  <form onSubmit={handleAdminLogin} className="space-y-3">
+                    <label htmlFor="modal-admin-access-code" className="block text-sm text-slate-300">Dashboard access code</label>
+                    <input
+                      id="modal-admin-access-code"
+                      type="password"
+                      autoComplete="current-password"
+                      required
+                      value={adminAccessCode}
+                      onChange={(event) => setAdminAccessCode(event.target.value)}
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
+                    />
+                    {accessError && <p role="alert" className="text-xs text-rose-300">{accessError}</p>}
+                    <button type="submit" className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500">Unlock owner dashboard</button>
+                  </form>
+                </>}
+              </div>
+            )}
+          </section>
+        </div>
       )}
     </div>
   );

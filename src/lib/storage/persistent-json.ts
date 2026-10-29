@@ -9,7 +9,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 export function isBlobStorageConfigured(): boolean {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+  return process.env.NODE_ENV !== 'test' && Boolean(process.env.BLOB_READ_WRITE_TOKEN);
 }
 
 export async function readPersistentJson<T>(blobPath: string, localPath: string): Promise<T | null> {
@@ -37,6 +37,7 @@ export async function writePersistentJson<T>(blobPath: string, localPath: string
   if (isBlobStorageConfigured()) {
     await put(blobPath, JSON.stringify(value), {
       access: 'private',
+      addRandomSuffix: false,
       allowOverwrite: true,
       cacheControlMaxAge: 60,
       contentType: 'application/json',
@@ -44,7 +45,7 @@ export async function writePersistentJson<T>(blobPath: string, localPath: string
     return;
   }
 
-  if (process.env.VERCEL === '1') {
+  if (process.env.VERCEL === '1' && process.env.NODE_ENV !== 'test') {
     throw new Error('Persistent storage is not configured. Connect a private Vercel Blob store to this project.');
   }
 

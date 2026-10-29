@@ -19,7 +19,7 @@ import type {
 export interface RawMenuItemInput {
   id?: string;
   name: string;
-  category?: string;
+  category: string;
   price: number;
   description?: string;
   dietary?: DishDietary;
@@ -64,11 +64,13 @@ export function normalizeMenuInput(raw: unknown): RawMenuItemInput[] {
     const flattened: RawMenuItemInput[] = [];
     let idx = 0;
     for (const section of obj.sections) {
-      const category = section.category || 'Mains';
-      if (Array.isArray(section.items)) {
-        for (const item of section.items) {
-          flattened.push(validateRawItem({ ...item, category: item.category || category }, idx++));
-        }
+      const category = typeof section.category === 'string' ? section.category.trim() : '';
+      if (!category) throw new Error(`Section at index ${idx} is missing a required category.`);
+      if (!Array.isArray(section.items)) {
+        throw new Error(`Section "${category}" must contain an items array.`);
+      }
+      for (const item of section.items) {
+        flattened.push(validateRawItem({ ...item, category: item.category || category }, idx++));
       }
     }
     return flattened;
@@ -89,8 +91,16 @@ function validateRawItem(item: unknown, index: number): RawMenuItemInput {
     throw new Error(`Item at index ${index} is missing a required "name" field.`);
   }
 
-  const price = typeof i.price === 'number' ? i.price : Number(i.price) || 0;
-  const category = typeof i.category === 'string' ? i.category.trim() : 'Mains';
+  const price = typeof i.price === 'number'
+    ? i.price
+    : typeof i.price === 'string' && i.price.trim() ? Number(i.price) : Number.NaN;
+  if (!Number.isFinite(price) || price < 0) {
+    throw new Error(`Item at index ${index} must have a valid non-negative price.`);
+  }
+  const category = typeof i.category === 'string' ? i.category.trim() : '';
+  if (!category) {
+    throw new Error(`Item at index ${index} is missing a required "category" field.`);
+  }
   const description = typeof i.description === 'string' ? i.description.trim() : '';
   const dietary = (['veg', 'non-veg', 'vegan'].includes(String(i.dietary))
     ? i.dietary
@@ -127,16 +137,17 @@ export function generateImportPreview(
 } {
   const items = normalizeMenuInput(rawJson);
   const existingMenu = getRestaurantMenu(restaurantId);
-  const restaurantName = existingMenu?.restaurantName || 'Restaurant';
+  if (!existingMenu) throw new Error(`Restaurant with ID "${restaurantId}" is not configured.`);
+  const restaurantName = existingMenu.restaurantName;
 
   const approvedAssets = getAllAssets({ status: 'approved' });
   const categorySet = new Set<string>();
 
   const previewItems: ImportPreviewItem[] = items.map((inputItem, index) => {
-    categorySet.add(inputItem.category || 'Mains');
+    categorySet.add(inputItem.category);
 
     // Check for existing item match by ID or by exact name in current restaurant menu
-    const existingItem = existingMenu?.items.find(
+    const existingItem = existingMenu.items.find(
       (item) => (inputItem.id && item.id === inputItem.id) || item.name.toLowerCase() === inputItem.name.toLowerCase()
     );
 
@@ -151,7 +162,7 @@ export function generateImportPreview(
       return {
         id: generatedItemId,
         name: inputItem.name,
-        category: inputItem.category || 'Mains',
+        category: inputItem.category,
         price: inputItem.price,
         description: inputItem.description || '',
         dietary: inputItem.dietary,
@@ -169,7 +180,7 @@ export function generateImportPreview(
         return {
           id: generatedItemId,
           name: inputItem.name,
-          category: inputItem.category || 'Mains',
+          category: inputItem.category,
           price: inputItem.price,
           description: inputItem.description || '',
           dietary: inputItem.dietary,
@@ -190,15 +201,13 @@ export function generateImportPreview(
 
     if (match.canonicalDish && match.confidence >= 0.85 && !match.requiresReview) {
       // Find suitable approved asset for this canonical dish
-      const asset =
-        approvedAssets.find((a) => a.canonicalDishId === match.canonicalDish?.id) ||
-        approvedAssets.find((a) => a.id === match.canonicalDish?.suitableAssetIds[0]);
+      const asset = approvedAssets.find((a) => a.canonicalDishId === match.canonicalDish?.id);
 
       if (asset) {
         return {
           id: generatedItemId,
           name: inputItem.name,
-          category: inputItem.category || 'Mains',
+          category: inputItem.category,
           price: inputItem.price,
           description: inputItem.description || '',
           dietary: inputItem.dietary,
@@ -221,7 +230,7 @@ export function generateImportPreview(
       return {
         id: generatedItemId,
         name: inputItem.name,
-        category: inputItem.category || 'Mains',
+        category: inputItem.category,
         price: inputItem.price,
         description: inputItem.description || '',
         dietary: inputItem.dietary,
@@ -241,7 +250,7 @@ export function generateImportPreview(
     return {
       id: generatedItemId,
       name: inputItem.name,
-      category: inputItem.category || 'Mains',
+      category: inputItem.category,
       price: inputItem.price,
       description: inputItem.description || '',
       dietary: inputItem.dietary,

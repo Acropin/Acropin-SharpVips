@@ -77,35 +77,9 @@ curl 'https://YOUR_WORKER_DOMAIN/api/v1/catalog?search=pizza&limit=20' \
   -H 'Authorization: Bearer YOUR_APPROVED_API_KEY'
 ```
 
-The catalog response includes signed `variants` with an image URL, pixel dimensions, format, and byte size for the available `480`, `960`, and `1600` pixel versions, plus attribution and license details. Use the URL matching the display size. Each image must already be processed as square WebP and uploaded by the owner to R2 before its variant is listed.
+The catalog response includes signed `variants` with an image URL, pixel dimensions, format, and byte size for available `480`, `960`, and `1600` pixel versions, plus attribution and license details. Use the URL matching the display size. A query returns no images until reviewed contributions have been synchronized.
 
-```json
-{
-  "slug": "classic-cheeseburger",
-  "dishName": "Classic Cheeseburger",
-  "variants": {
-    "480": { "url": "https://...", "width": 480, "height": 480, "format": "webp", "byteSize": 23800 }
-  }
-}
-```
-
-To add an entry, first write its metadata with the owner key:
-
-```sh
-curl -X PUT 'https://YOUR_WORKER_DOMAIN/api/v1/admin/catalog/classic-cheeseburger' \
-  -H "Authorization: Bearer $OWNER_API_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{"dishName":"Classic Cheeseburger","category":"burgers","creator":"Acropin community contributor","tags":["beef","burger"],"license":"CC0-1.0","sourceUrl":"https://example.org/source","licenseEvidenceUrl":"https://example.org/license"}'
-```
-
-Then upload each preprocessed WebP variant:
-
-```sh
-curl -X PUT 'https://YOUR_WORKER_DOMAIN/api/v1/admin/catalog/classic-cheeseburger/variants/480.webp' \
-  -H "Authorization: Bearer $OWNER_API_KEY" -H 'Content-Type: image/webp' --data-binary @480.webp
-```
-
-Repeat for 960 and 1600. Only approved catalog rows are returned publicly. Do not upload images without redistribution rights and accurate attribution.
+The supported way to add public catalog entries is a reviewed GitHub contribution under `packages/food-images/contributions/`. The release workflow validates source metadata, generates WebP files, and syncs the resulting catalog to D1/R2. The owner-only manual catalog routes are for controlled maintenance; use actual source and image-specific license evidence URLs and actual WebP bytes. Never use placeholder metadata or upload unreviewed files.
 
 ## Current limits and remaining setup
 

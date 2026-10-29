@@ -7,6 +7,10 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { processFoodImage } from '../src/lib/images/process-image.js';
+import {
+  MAX_PERCEPTUAL_DUPLICATE_DISTANCE,
+  perceptualHashDistance,
+} from '../src/lib/images/perceptual-hash.js';
 
 type ContributionMetadata = {
   dishName: string;
@@ -44,7 +48,13 @@ function fail(slug: string, message: string): never {
 function isHttpsUrl(value: unknown): value is string {
   if (typeof value !== 'string') return false;
   try {
-    return new URL(value).protocol === 'https:';
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    return url.protocol === 'https:' && !url.username && !url.password && !(
+      ['example', 'example.com', 'example.org', 'localhost', 'local', 'test', 'invalid'].includes(host) ||
+      ['.example', '.example.com', '.example.org', '.localhost', '.local', '.test', '.invalid']
+        .some((suffix) => host.endsWith(suffix))
+    );
   } catch {
     return false;
   }
@@ -70,7 +80,7 @@ function validateMetadata(value: unknown, slug: string): ContributionMetadata {
     fail(slug, 'dishName must be between 2 and 100 characters.');
   }
   if (/replace with/i.test(data.dishName)) fail(slug, 'replace the dishName example text.');
-  const category = typeof data.category === 'string' ? data.category.trim().toLowerCase() : 'food';
+  const category = typeof data.category === 'string' ? data.category.trim().toLowerCase() : '';
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(category) || category.length > 80) {
     fail(slug, 'category must be a short lowercase kebab-case value such as "pizza", "fruit", or "beverages".');
   }
@@ -90,6 +100,9 @@ function validateMetadata(value: unknown, slug: string): ContributionMetadata {
   }
   if (evidenceHost === 'example.com' || evidenceHost.endsWith('.example.com') || evidenceHost === 'example.org') {
     fail(slug, 'replace the licenseEvidenceUrl example text with image-specific evidence.');
+  }
+  if (data.sourceUrl === data.licenseEvidenceUrl) {
+    fail(slug, 'sourceUrl is not license evidence; provide a separate image-specific license evidence URL.');
   }
   if (prohibitedSourceHosts.some((host) => sourceHost === host || sourceHost.endsWith(`.${host}`))) {
     fail(slug, `images from ${sourceHost} are not accepted; provide an image with explicit rights to redistribute in this library.`);
@@ -135,6 +148,7 @@ async function main() {
 
   const slugs = new Set<string>();
   const hashes = new Set<string>();
+  const perceptualHashes: Array<{ slug: string; hash: string }> = [];
   const foodImages = [] as Array<Record<string, unknown>>;
 
   await fs.rm(outputRoot, { recursive: true, force: true });
@@ -171,6 +185,13 @@ async function main() {
     const processed = await processFoodImage(original, { focalPoint: metadata.focalPoint });
     if (hashes.has(processed.hash)) fail(slug, 'duplicate normalized image content; use a different image.');
     hashes.add(processed.hash);
+    const nearDuplicate = perceptualHashes.find(({ hash }) =>
+      perceptualHashDistance(hash, processed.perceptualHash) <= MAX_PERCEPTUAL_DUPLICATE_DISTANCE
+    );
+    if (nearDuplicate) {
+      fail(slug, `image is visually too similar to "${nearDuplicate.slug}" (pHash distance is at most ${MAX_PERCEPTUAL_DUPLICATE_DISTANCE}/64).`);
+    }
+    perceptualHashes.push({ slug, hash: processed.perceptualHash });
 
     const sourceMaxSquareSize = Math.min(processed.sourceDimensions.width, processed.sourceDimensions.height);
     const availableSizes = variantSizes.filter((size) => size === 480 || size <= sourceMaxSquareSize);
@@ -218,6 +239,7 @@ async function main() {
       url: String(variants['480'].url),
       variants,
       sha256: processed.hash,
+      perceptualHash: processed.perceptualHash,
       width: processed.width,
       height: processed.height,
       format: processed.format,
@@ -264,7 +286,7 @@ async function main() {
       `export interface FoodImage {\n` +
       `  id: string; slug: string; dishName: string; category: string; canonicalDishId?: string; tags: readonly string[];\n` +
       `  creator: string; sourceUrl: string; license: FoodImageLicense; licenseEvidenceUrl: string; attribution?: string;\n` +
-      `  url: string; variants: Readonly<Partial<Record<FoodImageSize, Readonly<FoodImageVariant>>>>; sha256: string; width: 480; height: 480; format: 'webp'; byteSize: number; originalByteSize: number;\n` +
+      `  url: string; variants: Readonly<Partial<Record<FoodImageSize, Readonly<FoodImageVariant>>>>; sha256: string; perceptualHash: string; width: 480; height: 480; format: 'webp'; byteSize: number; originalByteSize: number;\n` +
       `  focalPoint: Readonly<{ x: number; y: number }>;\n` +
       `}\n` +
       `export const foodImages: readonly FoodImage[];\n` +

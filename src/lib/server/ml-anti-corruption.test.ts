@@ -8,8 +8,8 @@ import assert from 'node:assert/strict';
 import sharp from 'sharp';
 import { inspectFoodImageWithMl } from './ml-anti-corruption.js';
 
-test('inspectFoodImageWithMl approves valid food image with color complexity', async () => {
-  // Test fast deterministic CV inspection by scoping GEMINI_API_KEY for pure unit testing
+test('structural fallback accepts a readable image without claiming to identify food', async () => {
+  // Test deterministic structural checks without making a paid model call.
   const originalKey = process.env.GEMINI_API_KEY;
   process.env.GEMINI_API_KEY = '';
 
@@ -35,12 +35,16 @@ test('inspectFoodImageWithMl approves valid food image with color complexity', a
       .toBuffer();
 
     const inspection = await inspectFoodImageWithMl(validBuffer, 'Margherita Pizza', 'margherita-pizza');
-    assert.equal(inspection.isFood, true);
+    assert.equal(inspection.verificationLevel, 'structural-check');
+    assert.equal(inspection.isFood, null);
+    assert.equal(inspection.matchesTargetDish, null);
     assert.equal(inspection.antiCorruptionPassed, true);
-    assert.ok(inspection.qualityScore >= 40);
+    assert.equal(inspection.qualityScore, undefined);
+    assert.match(inspection.reasoning || '', /human review is required/i);
     assert.ok(inspection.modelUsed);
   } finally {
-    process.env.GEMINI_API_KEY = originalKey;
+    if (originalKey === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = originalKey;
   }
 });
 
@@ -62,10 +66,13 @@ test('inspectFoodImageWithMl rejects solid-color canvas as dataset corruption', 
       .toBuffer();
 
     const inspection = await inspectFoodImageWithMl(solidBuffer, 'Margherita Pizza', 'margherita-pizza');
+    assert.equal(inspection.verificationLevel, 'structural-check');
+    assert.equal(inspection.isFood, null);
     assert.equal(inspection.antiCorruptionPassed, false);
     assert.ok(inspection.rejectionReason);
-    assert.match(inspection.rejectionReason, /anti-corruption|blank|canvas/i);
+    assert.match(inspection.rejectionReason, /one color|structural image check/i);
   } finally {
-    process.env.GEMINI_API_KEY = originalKey;
+    if (originalKey === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = originalKey;
   }
 });

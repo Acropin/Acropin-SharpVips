@@ -1,6 +1,6 @@
 # `acropin-food-images`
 
-An open, community-maintained catalog of normalized food images for restaurant menus and food applications. Every image has a 480 × 480 WebP; 960 × 960 and 1600 × 1600 variants are generated when the source resolution supports them. Catalog entries include dish name, category, tags, source, and per-image license information.
+An open, community-maintained catalog of normalized food images for restaurant menus and food applications. Each published image has a 480 × 480 WebP; 960 × 960 and 1600 × 1600 variants are generated when the source resolution supports them. Catalog entries include dish name, category, tags, source, and per-image license information.
 
 ## Install
 
@@ -19,6 +19,8 @@ export function MenuItem() {
   return image ? <img src={image.variants?.[960]?.url ?? image.url} alt={image.dishName} /> : null;
 }
 ```
+
+The initial catalog is empty. Until a matching contribution is reviewed, released, and installed, this lookup returns `undefined` and the component renders no image.
 
 You can also use the URL helper or search by text, tag, and license:
 

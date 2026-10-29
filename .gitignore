@@ -12,3 +12,4 @@ coverage/
 .vercel
 .wrangler/
 .dev.vars*
+.local-data/

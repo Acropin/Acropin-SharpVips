@@ -1,12 +1,12 @@
 {
-  "dishName": "Replace with the dish name",
-  "category": "food",
+  "dishName": "",
+  "category": "",
   "canonicalDishId": "",
-  "tags": ["replace", "with", "useful", "tags"],
-  "creator": "Your name or the image rightsholder",
-  "sourceUrl": "https://example.com/the-image-or-source-page",
-  "license": "CC-BY-4.0",
-  "licenseEvidenceUrl": "https://example.com/evidence-that-this-image-can-be-redistributed",
-  "attribution": "Required for CC-BY-4.0; include creator, title, source, and license link.",
+  "tags": [],
+  "creator": "",
+  "sourceUrl": "",
+  "license": "",
+  "licenseEvidenceUrl": "",
+  "attribution": "",
   "focalPoint": { "x": 0.5, "y": 0.5 }
 }

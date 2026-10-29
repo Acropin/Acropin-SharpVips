@@ -28,120 +28,13 @@ interface MenuImportReviewProps {
   onImportComplete?: () => void;
 }
 
-const SAMPLE_MENUS: Record<string, string> = {
-  spice_monsoon: JSON.stringify(
-    {
-      restaurantName: 'Spice Garden Indian Bistro',
-      cuisine: 'Indian',
-      items: [
-        {
-          id: 'item_sg_1',
-          name: 'Paneer Butter Masala',
-          category: 'Mains',
-          price: 16.5,
-          description: 'Velvety cottage cheese in aromatic tomato, cashew, and churned butter sauce.',
-          dietary: 'veg',
-        },
-        {
-          id: 'item_sg_2',
-          name: 'Butter Chicken (Murgh Makhani)',
-          category: 'Mains',
-          price: 18.0,
-          description: 'Tandoori grilled chicken steeped in rich tomato cream and fenugreek reduction.',
-          dietary: 'non-veg',
-        },
-        {
-          name: 'Authentic Dal Makhani',
-          category: 'Mains',
-          price: 13.5,
-          description: 'Slow cooked black urad dal with churned butter.',
-          dietary: 'veg',
-        },
-        {
-          name: 'Tandoori Garlic Naan',
-          category: 'Breads',
-          price: 4.5,
-          description: 'Fresh garlic brushed clay oven naan.',
-          dietary: 'veg',
-        },
-        {
-          name: 'Vegetable Dum Biryani',
-          category: 'Rice & Biryani',
-          price: 15.0,
-          description: 'Aromatic basmati rice layered with seasonal vegetables and saffron.',
-          dietary: 'veg',
-        },
-        {
-          name: 'Spicy Artisanal Stonebaked Pizza',
-          category: 'Chef Specials',
-          price: 17.5,
-          description: 'Fusion flatbread pizza with herbs and mozzarella.',
-        },
-        {
-          name: 'Monsoon Chai & Pakora Basket',
-          category: 'Appetizers',
-          price: 8.5,
-          description: 'Crispy onion fritters served with steamed spiced tea.',
-          dietary: 'veg',
-        },
-      ],
-    },
-    null,
-    2
-  ),
-  bella_autumn: JSON.stringify(
-    {
-      restaurantName: 'Bella Tavola Cucina',
-      cuisine: 'Italian',
-      items: [
-        {
-          id: 'item_bt_1',
-          name: 'Classic Margherita Pizza',
-          category: 'Pizza',
-          price: 16.5,
-          description: 'San Marzano tomatoes, fior di latte mozzarella, fresh basil.',
-          dietary: 'veg',
-        },
-        {
-          name: 'Spaghetti Carbonara',
-          category: 'Pasta',
-          price: 19.5,
-          description: 'Guanciale, pecorino romano, egg yolks, freshly cracked black pepper.',
-          dietary: 'non-veg',
-        },
-        {
-          name: 'Fiery Penne Arrabbiata',
-          category: 'Pasta',
-          price: 15.5,
-          description: 'Garlic pomodoro with crushed red chili flakes.',
-          dietary: 'vegan',
-        },
-        {
-          name: 'Classic Tiramisu',
-          category: 'Dolci',
-          price: 9.0,
-          description: 'Espresso infused ladyfingers with mascarpone cream.',
-          dietary: 'veg',
-        },
-        {
-          name: 'Insalata di Mare',
-          category: 'Antipasti',
-          price: 14.0,
-          description: 'Chilled calamari and shrimp salad with lemon dressing.',
-          dietary: 'non-veg',
-        },
-      ],
-    },
-    null,
-    2
-  ),
-};
+
 
 export const MenuImportReview: React.FC<MenuImportReviewProps> = ({
   currentRestaurantId,
   onImportComplete,
 }) => {
-  const [jsonText, setJsonText] = useState(SAMPLE_MENUS.spice_monsoon);
+  const [jsonText, setJsonText] = useState('');
   const [previewItems, setPreviewItems] = useState<ImportPreviewItem[] | null>(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
@@ -259,33 +152,11 @@ export const MenuImportReview: React.FC<MenuImportReviewProps> = ({
           <div>
             <h2 className="text-base font-bold text-white">Menu JSON Payload</h2>
             <p className="text-xs text-slate-400">
-              Paste your restaurant menu JSON or choose a pre-configured sample:
+              Paste the JSON for this restaurant menu, then preview it before committing changes:
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400">Load Sample:</span>
-            <button
-              onClick={() => {
-                setJsonText(SAMPLE_MENUS.spice_monsoon);
-                setPreviewItems(null);
-                setSummaryReport(null);
-              }}
-              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition"
-            >
-              Spice Bistro
-            </button>
-            <button
-              onClick={() => {
-                setJsonText(SAMPLE_MENUS.bella_autumn);
-                setPreviewItems(null);
-                setSummaryReport(null);
-              }}
-              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition"
-            >
-              Bella Tavola
-            </button>
-          </div>
+
         </div>
 
         <textarea
@@ -457,7 +328,7 @@ export const MenuImportReview: React.FC<MenuImportReviewProps> = ({
                           </div>
                         ) : (
                           <span className="text-slate-500 italic text-[11px]">
-                            No image (Category icon)
+                            No image assigned
                           </span>
                         )}
                       </td>
@@ -510,7 +381,7 @@ export const MenuImportReview: React.FC<MenuImportReviewProps> = ({
                 <span className="text-lg font-bold text-blue-400">{summaryReport.preservedExisting}</span>
               </div>
               <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
-                <span className="text-slate-400 text-[10px] uppercase block">Category Placeholders</span>
+                <span className="text-slate-400 text-[10px] uppercase block">Items without images</span>
                 <span className="text-lg font-bold text-slate-400">
                   {summaryReport.noImageMatched + summaryReport.needsReview}
                 </span>
@@ -553,7 +424,7 @@ export const MenuImportReview: React.FC<MenuImportReviewProps> = ({
                 onClick={() => handleApplyOverride(null)}
                 className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition"
               >
-                Clear Image (Use Category Placeholder)
+                Clear Image Assignment
               </button>
             </div>
 

@@ -13,7 +13,8 @@ interface MetadataInspectorModalProps {
 }
 
 export function MetadataInspectorModal({ asset, onClose }: MetadataInspectorModalProps) {
-  const metadata: AcropinMetadataTags = asset.acropinMetadata || {
+  const metadata: AcropinMetadataTags = {
+    ...(asset.acropinMetadata || {
     publisher: 'Acropin Open Food Library',
     universalName: asset.universalName,
     cleanExif: true,
@@ -24,11 +25,16 @@ export function MetadataInspectorModal({ asset, onClose }: MetadataInspectorModa
       asset.retinaUrl ? '960x960' : '',
       asset.hiResUrl ? '1600x1600' : '',
     ].filter(Boolean),
-    license: asset.licenseType || 'CC0',
+    license: asset.licenseType,
     contributorGitHub: asset.contributorGitHub,
-    dcoSignOff: asset.dcoSignOff,
-    mlVerified: Boolean(asset.mlInspection?.antiCorruptionPassed),
+    rightsAttested: asset.rightsAttested,
+    mlVerified: false,
     timestamp: asset.createdAt,
+    }),
+    mlVerified: Boolean(
+      asset.mlInspection?.verificationLevel === 'vision-model' &&
+      asset.mlInspection.antiCorruptionPassed
+    ),
   };
 
   return (
@@ -106,7 +112,7 @@ export function MetadataInspectorModal({ asset, onClose }: MetadataInspectorModa
             <div className="flex items-center justify-between text-slate-200">
               <span className="text-slate-400">mlVerified:</span>
               <span className={metadata.mlVerified ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
-                {metadata.mlVerified ? 'PASSED (Anti-Corruption Validated)' : 'Unverified'}
+                {metadata.mlVerified ? 'Vision checks passed' : 'Not vision-verified'}
               </span>
             </div>
 
@@ -117,11 +123,11 @@ export function MetadataInspectorModal({ asset, onClose }: MetadataInspectorModa
               </div>
             )}
 
-            {metadata.dcoSignOff && (
+            {metadata.rightsAttested && (
               <div className="pt-2 border-t border-slate-800/60">
-                <span className="text-slate-400 block mb-1">dcoSignOff:</span>
+                <span className="text-slate-400 block mb-1">redistributionRightsAttested:</span>
                 <span className="text-slate-300 text-[11px] block break-all bg-slate-900 p-2 rounded border border-slate-800">
-                  {metadata.dcoSignOff}
+                  Contributor confirmed redistribution rights. No external proof link is collected in the upload form.
                 </span>
               </div>
             )}

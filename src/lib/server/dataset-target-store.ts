@@ -3,43 +3,48 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import path from 'node:path';
-import { readPersistentJson, writePersistentJson } from '../storage/persistent-json.js';
+import { getAppDataFile } from '../storage/data-directory.js';
+import { isBlobStorageConfigured, readPersistentJson, writePersistentJson } from '../storage/persistent-json.js';
 import { toUniversalFoodName } from '../images/universal-naming.js';
-import type { DatasetTargetItem, ImageAsset, DishDietary, AcropinMetadataTags } from '../images/types.js';
+import { CANONICAL_DISHES } from '../catalog/canonical-dishes.js';
+import type { DatasetTargetItem, ImageAsset, DishDietary, DatasetTargetDietary, AcropinMetadataTags } from '../images/types.js';
 
-const TARGETS_DATA_FILE = path.resolve(process.cwd(), './storage/dataset-targets.json');
+const targetsDataFile = () => getAppDataFile('dataset-targets.json');
 
 let targetDataset: DatasetTargetItem[] = [];
 let isInitialized = false;
 let initializePromise: Promise<void> | null = null;
 let pendingSave: Promise<void> = Promise.resolve();
+let targetDatasetOperationQueue: Promise<void> = Promise.resolve();
 
-// Standard universal food catalog targets for restaurant menus (no regional bias or dummy data)
-const UNIVERSAL_STANDARD_TARGETS: Omit<DatasetTargetItem, 'id' | 'universalSlug' | 'createdAt'>[] = [
-  { name: 'Margherita Pizza', region: 'Italian', category: 'Mains', dietary: 'veg' },
-  { name: 'Classic Cheeseburger', region: 'American', category: 'Mains', dietary: 'non-veg' },
-  { name: 'Tonkotsu Ramen', region: 'Japanese', category: 'Mains', dietary: 'non-veg' },
-  { name: 'Caesar Salad', region: 'Salads', category: 'Appetizers', dietary: 'veg' },
-  { name: 'Spaghetti Carbonara', region: 'Italian', category: 'Mains', dietary: 'non-veg' },
-  { name: 'Crispy French Fries', region: 'Sides', category: 'Sides', dietary: 'vegan' },
-  { name: 'Grilled Atlantic Salmon', region: 'Seafood', category: 'Mains', dietary: 'non-veg' },
-  { name: 'Chicken Biryani', region: 'Rice & Grains', category: 'Mains', dietary: 'non-veg' },
-  { name: 'Classic Tiramisu', region: 'Bakery', category: 'Desserts', dietary: 'veg' },
-  { name: 'Chocolate Fudge Brownie', region: 'Bakery', category: 'Desserts', dietary: 'veg' },
-  { name: 'Cappuccino', region: 'Coffee', category: 'Beverages', dietary: 'veg' },
-  { name: 'Fresh Guacamole & Chips', region: 'Mexican', category: 'Appetizers', dietary: 'vegan' },
-  { name: 'Crispy Street Tacos', region: 'Mexican', category: 'Mains', dietary: 'non-veg' },
-  { name: 'Greek Salad', region: 'Mediterranean', category: 'Appetizers', dietary: 'veg' },
-  { name: 'Triple Decker Club Sandwich', region: 'Deli', category: 'Mains', dietary: 'non-veg' },
-  { name: 'Tom Yum Soup', region: 'Thai', category: 'Appetizers', dietary: 'non-veg' },
-  { name: 'Mango Smoothie', region: 'Beverages', category: 'Beverages', dietary: 'veg' },
-  { name: 'Butter Croissant', region: 'Bakery', category: 'Sides', dietary: 'veg' },
-];
+const LEGACY_SEED_TARGET_IDS = new Set([
+  'target_margherita-pizza',
+  'target_classic-cheeseburger',
+  'target_tonkotsu-ramen',
+  'target_caesar-salad',
+  'target_spaghetti-carbonara',
+  'target_crispy-french-fries',
+  'target_grilled-atlantic-salmon',
+  'target_chicken-biryani',
+  'target_classic-tiramisu',
+  'target_chocolate-fudge-brownie',
+  'target_cappuccino',
+  'target_fresh-guacamole-chips',
+  'target_crispy-street-tacos',
+  'target_greek-salad',
+  'target_triple-decker-club-sandwich',
+  'target_tom-yum-soup',
+  'target_mango-smoothie',
+  'target_butter-croissant',
+]);
 
 function saveTargetsToFile() {
+  const snapshot = targetDataset.map((item) => ({
+    ...item,
+    ...(item.sourceIds ? { sourceIds: [...item.sourceIds] } : {}),
+  }));
   pendingSave = pendingSave.catch(() => undefined).then(() =>
-    writePersistentJson('app-data/dataset-targets.json', TARGETS_DATA_FILE, targetDataset)
+    writePersistentJson('app-data/dataset-targets.json', targetsDataFile(), snapshot)
   );
 }
 
@@ -47,41 +52,95 @@ export async function initializeTargetDataset(): Promise<void> {
   if (isInitialized) return;
   if (!initializePromise) {
     initializePromise = (async () => {
-      try {
-        const stored = await readPersistentJson<DatasetTargetItem[]>(
-          'app-data/dataset-targets.json',
-          TARGETS_DATA_FILE
-        );
-        if (Array.isArray(stored) && stored.length > 0) {
-          targetDataset = stored;
-        } else {
-          // Initialize with standard universal menu items
-          const now = new Date().toISOString();
-          targetDataset = UNIVERSAL_STANDARD_TARGETS.map((dish) => {
-            const universal = toUniversalFoodName(dish.name);
-            return {
-              id: `target_${universal.universalName}`,
-              name: dish.name,
-              universalSlug: universal.universalName,
-              region: dish.region || 'Universal',
-              category: dish.category || 'Mains',
-              dietary: dish.dietary,
-              createdAt: now,
-            };
-          });
-          saveTargetsToFile();
-        }
-      } catch {
+      const stored = await readPersistentJson<unknown>(
+        'app-data/dataset-targets.json',
+        targetsDataFile()
+      );
+      if (stored === null) {
         targetDataset = [];
+      } else if (Array.isArray(stored) && stored.every(isDatasetTargetItem)) {
+        // An intentionally empty inventory is valid and must stay empty.
+        targetDataset = stored.filter((item) => !LEGACY_SEED_TARGET_IDS.has(item.id));
+        if (targetDataset.length !== stored.length &&
+            (isBlobStorageConfigured() || process.env.VERCEL !== '1')) {
+          saveTargetsToFile();
+          await flushTargets();
+        }
+      } else {
+        throw new Error('Dataset target storage is invalid. Fix the stored data before accepting changes.');
       }
       isInitialized = true;
     })();
   }
-  await initializePromise;
+
+  try {
+    await initializePromise;
+  } catch (error) {
+    initializePromise = null;
+    throw error;
+  }
+}
+
+function isDatasetTargetItem(value: unknown): value is DatasetTargetItem {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const target = value as Partial<DatasetTargetItem>;
+  return (
+    typeof target.id === 'string' &&
+    typeof target.name === 'string' && target.name.trim().length > 0 &&
+    typeof target.universalSlug === 'string' && target.universalSlug.trim().length > 0 &&
+    typeof target.category === 'string' && target.category.trim().length > 0 &&
+    (target.region === undefined || typeof target.region === 'string') &&
+    (target.dietary === 'veg' || target.dietary === 'non-veg' || target.dietary === 'vegan' ||
+      target.dietary === 'egg' || target.dietary === 'mixed' || target.dietary === 'unknown') &&
+    (target.sourceIds === undefined || (Array.isArray(target.sourceIds) && target.sourceIds.every((id) => typeof id === 'string'))) &&
+    typeof target.createdAt === 'string'
+  );
 }
 
 export async function flushTargets(): Promise<void> {
   await pendingSave;
+}
+
+/** Reload the latest shared target list so warm server instances do not serve stale inventory. */
+export async function refreshTargetDataset(): Promise<void> {
+  await initializeTargetDataset();
+  await flushTargets();
+
+  const stored = await readPersistentJson<unknown>(
+    'app-data/dataset-targets.json',
+    targetsDataFile()
+  );
+  if (stored === null) {
+    targetDataset = [];
+    return;
+  }
+  if (!Array.isArray(stored) || !stored.every(isDatasetTargetItem)) {
+    throw new Error('Dataset target storage is invalid. Fix the stored data before accepting changes.');
+  }
+
+  const latestTargets = stored.filter((item) => !LEGACY_SEED_TARGET_IDS.has(item.id));
+  targetDataset = latestTargets;
+  if (latestTargets.length !== stored.length) {
+    saveTargetsToFile();
+    await flushTargets();
+  }
+}
+
+/** Run a read or write against a fresh inventory, in order with other requests on this instance. */
+export async function withFreshTargetDataset<T>(operation: () => T | Promise<T>): Promise<T> {
+  const previousOperation = targetDatasetOperationQueue;
+  let releaseOperation!: () => void;
+  targetDatasetOperationQueue = new Promise<void>((resolve) => {
+    releaseOperation = resolve;
+  });
+
+  await previousOperation;
+  try {
+    await refreshTargetDataset();
+    return await operation();
+  } finally {
+    releaseOperation();
+  }
 }
 
 export function getAllTargetItems(): DatasetTargetItem[] {
@@ -91,23 +150,34 @@ export function getAllTargetItems(): DatasetTargetItem[] {
 
 export function addTargetItem(
   name: string,
-  category = 'Mains',
-  dietary: DishDietary = 'veg',
-  region = 'Universal',
+  category: string,
+  dietary: DishDietary,
+  region?: string,
   notes?: string
 ): DatasetTargetItem {
   initializeTargetDataset();
+  if (!name.trim()) throw new Error('Dish name is required.');
+  if (!category.trim()) throw new Error('Dish category is required.');
+  if (!['veg', 'non-veg', 'vegan'].includes(dietary)) {
+    throw new Error('Choose a dietary value: veg, non-veg, or vegan.');
+  }
+  if (region !== undefined && typeof region !== 'string') throw new Error('Region must be text.');
+  if (notes !== undefined && typeof notes !== 'string') throw new Error('Notes must be text.');
   const universal = toUniversalFoodName(name);
-  const existingIdx = targetDataset.findIndex(
-    (t) => t.universalSlug === universal.universalName || t.name.toLowerCase() === name.toLowerCase()
+  if (!universal.universalName) throw new Error('Dish name must include letters or numbers.');
+  const normalizedRegion = region?.trim().toLowerCase() || '';
+  const existingIdx = targetDataset.findIndex((t) =>
+    t.universalSlug === universal.universalName &&
+    t.category.trim().toLowerCase() === category.trim().toLowerCase() &&
+    (t.region?.trim().toLowerCase() || '') === normalizedRegion
   );
 
   const item: DatasetTargetItem = {
-    id: `target_${universal.universalName}`,
+    id: `target_${universal.universalName}__${toUniversalFoodName(category).universalName || 'category'}__all-regions`,
     name: universal.displayName,
     universalSlug: universal.universalName,
-    region: (region || 'Universal').trim(),
-    category: (category || 'Mains').trim(),
+    region: region?.trim() || undefined,
+    category: category.trim(),
     dietary,
     notes,
     createdAt: new Date().toISOString(),
@@ -125,35 +195,82 @@ export function addTargetItem(
 
 /**
  * Bulk import rows pasted from Excel or CSV files.
- * Format of each row: { name, category?, dietary?, region?, notes? }
+ * Format of each row: { name, category, dietary, region?, notes? }
  */
 export function bulkImportTargets(
-  items: Array<{ name: string; category?: string; dietary?: string; region?: string; notes?: string }>,
+  items: Array<{ sourceId?: string; name: string; category: string; dietary: string; region?: string; notes?: string }>,
   replaceExisting = false
 ): { added: number; total: number } {
   initializeTargetDataset();
+  if (items.length === 0) throw new Error('Provide at least one dish row before importing.');
+
+  const validatedItems = items.map((raw, index) => {
+    if (!raw || typeof raw !== 'object') {
+      throw new Error(`Row ${index + 1} must contain a dish name, category, and dietary value.`);
+    }
+    const name = typeof raw.name === 'string' ? raw.name.trim() : '';
+    const category = typeof raw.category === 'string' ? raw.category.trim() : '';
+    const dietary = raw.dietary;
+    if (!name) throw new Error(`Row ${index + 1}: dish name is required.`);
+    if (!category) throw new Error(`Row ${index + 1}: category is required.`);
+    if (!['veg', 'non-veg', 'vegan', 'egg', 'mixed', 'unknown'].includes(dietary)) {
+      throw new Error(`Row ${index + 1}: dietary value must be veg, non-veg, vegan, egg, mixed, or unknown.`);
+    }
+    if (raw.region !== undefined && typeof raw.region !== 'string') {
+      throw new Error(`Row ${index + 1}: region must be text.`);
+    }
+    if (raw.notes !== undefined && typeof raw.notes !== 'string') {
+      throw new Error(`Row ${index + 1}: notes must be text.`);
+    }
+    if (raw.sourceId !== undefined && typeof raw.sourceId !== 'string') {
+      throw new Error(`Row ${index + 1}: source ID must be text.`);
+    }
+    return { ...raw, name, category, dietary: dietary as DatasetTargetDietary };
+  });
+
   if (replaceExisting) {
     targetDataset = [];
   }
 
+  const identityOf = (slug: string, category: string, region?: string) =>
+    [slug, category.trim().toLowerCase(), region?.trim().toLowerCase() || ''].join('\u0000');
+  const targetsByIdentity = new Map(
+    targetDataset.map((target) => [identityOf(target.universalSlug, target.category, target.region), target])
+  );
   let addedCount = 0;
-  for (const raw of items) {
-    if (!raw.name || typeof raw.name !== 'string' || !raw.name.trim()) continue;
+  for (const raw of validatedItems) {
     const universal = toUniversalFoodName(raw.name);
-    const existing = targetDataset.find((t) => t.universalSlug === universal.universalName);
-    if (!existing) {
+    if (!universal.universalName) throw new Error(`Dish name "${raw.name}" must include letters or numbers.`);
+    const normalizedRegion = raw.region?.trim().toLowerCase() || '';
+    const identity = identityOf(universal.universalName, raw.category, normalizedRegion);
+    const existing = targetsByIdentity.get(identity);
+    if (existing) {
+      const sourceId = raw.sourceId?.trim();
+      if (sourceId) existing.sourceIds = [...new Set([...(existing.sourceIds || []), sourceId])];
+      if (existing.dietary !== raw.dietary && existing.dietary !== 'unknown' && raw.dietary !== 'unknown') {
+        existing.dietary = 'mixed';
+      } else if (existing.dietary === 'unknown' && raw.dietary !== 'unknown') {
+        existing.dietary = raw.dietary;
+      }
+      if (!existing.notes && raw.notes?.trim()) existing.notes = raw.notes.trim();
+    } else {
+      const categorySlug = toUniversalFoodName(raw.category).universalName || 'category';
+      const regionSlug = normalizedRegion
+        ? toUniversalFoodName(raw.region || '').universalName || 'region'
+        : 'all-regions';
+      const sourceIds = raw.sourceId?.trim() ? [raw.sourceId.trim()] : undefined;
       targetDataset.push({
-        id: `target_${universal.universalName}`,
+        id: `target_${universal.universalName}__${categorySlug}__${regionSlug}`,
         name: universal.displayName,
         universalSlug: universal.universalName,
-        region: (raw.region || 'Universal').trim(),
-        category: (raw.category || 'Mains').trim(),
-        dietary: (['veg', 'non-veg', 'vegan'].includes(String(raw.dietary))
-          ? raw.dietary
-          : 'veg') as DishDietary,
+        region: raw.region?.trim() || undefined,
+        category: raw.category,
+        dietary: raw.dietary,
+        sourceIds,
         notes: raw.notes ? String(raw.notes).trim() : undefined,
         createdAt: new Date().toISOString(),
       });
+      targetsByIdentity.set(identity, targetDataset[targetDataset.length - 1]);
       addedCount++;
     }
   }
@@ -182,7 +299,8 @@ export interface InventoryTableRow {
   name: string;
   universalSlug: string;
   category: string;
-  dietary: DishDietary;
+  dietary: DatasetTargetDietary;
+  region?: string;
   status: 'available' | 'missing' | 'in_review';
   asset?: ImageAsset;
   variantsAvailable: string[];
@@ -244,7 +362,7 @@ export function computeDatasetStatus(
   const categoryStats: Record<string, { total: number; completed: number; missing: number }> = {};
 
   for (const target of targetDataset) {
-    const cat = target.category || 'Mains';
+    const cat = target.category;
     if (!categoryStats[cat]) {
       categoryStats[cat] = { total: 0, completed: 0, missing: 0 };
     }
@@ -257,7 +375,7 @@ export function computeDatasetStatus(
     const matchedPending = pendingMap.get(target.universalSlug.toLowerCase());
 
     // Prompt specifically crafted for contributors using ChatGPT / AI models
-    const aiPrompt = `Award-winning commercial food photograph of ${target.name}, perfectly plated on authentic tableware, natural diffused studio lighting, shallow depth of field, 8k resolution, crisp detail, restaurant menu presentation, clean background, no text, no watermark.`;
+    const aiPrompt = `Award-winning commercial cuisine and product photograph of ${target.name}, professional studio lighting, shallow depth of field, 8k resolution, crisp detail, gourmet restaurant menu presentation, clean minimalist background, photorealistic style, no text, no watermark.`;
 
     if (matchedApproved) {
       categoryStats[cat].completed++;
@@ -277,6 +395,7 @@ export function computeDatasetStatus(
         universalSlug: target.universalSlug,
         category: cat,
         dietary: target.dietary,
+        region: target.region,
         status: 'available',
         asset: matchedApproved,
         variantsAvailable: variants,
@@ -287,10 +406,13 @@ export function computeDatasetStatus(
           cleanExif: true,
           schemaVersion: '2.0',
           variantsAvailable: variants,
-          license: matchedApproved.licenseType || 'CC0',
+          license: matchedApproved.licenseType,
           contributorGitHub: matchedApproved.contributorGitHub,
-          dcoSignOff: matchedApproved.dcoSignOff,
-          mlVerified: Boolean(matchedApproved.mlInspection?.antiCorruptionPassed),
+          rightsAttested: matchedApproved.rightsAttested,
+          mlVerified: Boolean(
+            matchedApproved.mlInspection?.verificationLevel === 'vision-model' &&
+            matchedApproved.mlInspection.antiCorruptionPassed
+          ),
           timestamp: matchedApproved.createdAt,
         },
         recommendedAiPrompt: aiPrompt,
@@ -308,6 +430,7 @@ export function computeDatasetStatus(
         universalSlug: target.universalSlug,
         category: cat,
         dietary: target.dietary,
+        region: target.region,
         status: 'in_review',
         asset: matchedPending,
         variantsAvailable: variants,
@@ -327,6 +450,7 @@ export function computeDatasetStatus(
         universalSlug: target.universalSlug,
         category: cat,
         dietary: target.dietary,
+        region: target.region,
         status: 'missing',
         variantsAvailable: [],
         fileSizeKb: 0,
@@ -349,8 +473,8 @@ export function computeDatasetStatus(
         id: asset.id,
         name: asset.dishName,
         universalSlug: asset.universalName,
-        category: 'Uncategorized',
-        dietary: 'veg',
+        category: CANONICAL_DISHES.find((dish) => dish.id === asset.canonicalDishId)?.category ?? 'Uncategorized',
+        dietary: CANONICAL_DISHES.find((dish) => dish.id === asset.canonicalDishId)?.dietary ?? 'unknown',
         status: 'available',
         asset,
         variantsAvailable: variants,

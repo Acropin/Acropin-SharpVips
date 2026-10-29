@@ -6,6 +6,7 @@
 import crypto from 'node:crypto';
 import sharp, { type Metadata } from 'sharp';
 import { ImageValidationError, ImageTooSmallError, ImageProcessingError } from './errors.js';
+import { computePerceptualHash } from './perceptual-hash.js';
 import type { FocalPoint, ImageProcessingOptions, ProcessedImageResult } from './types.js';
 
 // Limits & Safety Bounds
@@ -220,6 +221,7 @@ export async function processFoodImage(
 
   // Step 5: Compute SHA-256 hash for primary 480x480
   const sha256Hash = crypto.createHash('sha256').update(finalBuffer).digest('hex');
+  const perceptualHash = await computePerceptualHash(baseProcessedBuffer);
 
   // Step 6: Generate ultra-compact 128x128 thumbnail without losing visual crispness
   const thumbnailWidth = 128;
@@ -281,6 +283,7 @@ export async function processFoodImage(
   return {
     buffer: finalBuffer,
     hash: sha256Hash,
+    perceptualHash,
     width: targetWidth,
     height: targetHeight,
     format: 'webp',

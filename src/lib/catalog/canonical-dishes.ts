@@ -16,7 +16,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'veg',
     ingredients: ['paneer', 'butter', 'tomatoes', 'cashews', 'cream', 'garam masala', 'kasuri methi'],
     preparation: 'Cottage cheese simmered in rich velvety tomato, cashew, and butter gravy.',
-    suitableAssetIds: ['asset_paneer_butter_masala_1'],
   },
   {
     id: 'dish_butter_chicken',
@@ -27,7 +26,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'non-veg',
     ingredients: ['chicken', 'butter', 'tomatoes', 'cream', 'ginger', 'garlic', 'fenugreek'],
     preparation: 'Tender tandoori chicken chunks slow-cooked in a silky butter tomato sauce.',
-    suitableAssetIds: ['asset_butter_chicken_1'],
   },
   {
     id: 'dish_dal_makhani',
@@ -38,7 +36,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'veg',
     ingredients: ['whole black lentils', 'kidney beans', 'butter', 'cream', 'tomatoes'],
     preparation: 'Slow-simmered black urad lentils infused with smoked butter and cream.',
-    suitableAssetIds: ['asset_dal_makhani_1'],
   },
   {
     id: 'dish_chicken_biryani',
@@ -49,7 +46,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'non-veg',
     ingredients: ['basmati rice', 'chicken', 'saffron', 'mint', 'caramelized onions', 'ghee'],
     preparation: 'Fragrant basmati rice layered with spiced marinated chicken cooked on dum.',
-    suitableAssetIds: ['asset_chicken_biryani_1'],
   },
   {
     id: 'dish_veg_biryani',
@@ -60,7 +56,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'veg',
     ingredients: ['basmati rice', 'carrots', 'beans', 'potatoes', 'peas', 'paneer', 'saffron'],
     preparation: 'Long-grain basmati rice layered with garden vegetables, saffron and spices.',
-    suitableAssetIds: ['asset_veg_biryani_1'],
   },
   {
     id: 'dish_garlic_naan',
@@ -71,7 +66,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'veg',
     ingredients: ['refined flour', 'garlic', 'cilantro', 'butter', 'nigella seeds'],
     preparation: 'Traditional clay-oven flatbread brushed with garlic butter and herbs.',
-    suitableAssetIds: ['asset_garlic_naan_1'],
   },
   {
     id: 'dish_samosa',
@@ -82,7 +76,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'vegan',
     ingredients: ['flour pastry', 'spiced potatoes', 'green peas', 'cumin', 'coriander'],
     preparation: 'Crisp golden pastry pockets stuffed with spiced potatoes and peas.',
-    suitableAssetIds: ['asset_samosa_1'],
   },
   {
     id: 'dish_gulab_jamun',
@@ -93,7 +86,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'veg',
     ingredients: ['khoya', 'milk powder', 'cardamom', 'rose water', 'sugar syrup'],
     preparation: 'Soft fried dough dumplings soaked in rose and cardamom flavored sugar syrup.',
-    suitableAssetIds: ['asset_gulab_jamun_1'],
   },
 
   // --- Italian Specialties ---
@@ -106,7 +98,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'veg',
     ingredients: ['san marzano tomatoes', 'fresh mozzarella', 'fresh basil', 'extra virgin olive oil'],
     preparation: 'Wood-fired sourdough crust topped with San Marzano tomato sauce and fior di latte.',
-    suitableAssetIds: ['asset_margherita_pizza_1'],
   },
   {
     id: 'dish_pepperoni_pizza',
@@ -117,7 +108,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'non-veg',
     ingredients: ['mozzarella', 'cured pepperoni', 'tomato sauce', 'oregano'],
     preparation: 'Stone-baked pizza topped with crispy pepperoni slices and molten mozzarella.',
-    suitableAssetIds: ['asset_pepperoni_pizza_1'],
   },
   {
     id: 'dish_spaghetti_carbonara',
@@ -128,7 +118,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'non-veg',
     ingredients: ['spaghetti', 'guanciale', 'egg yolk', 'pecorino romano', 'black pepper'],
     preparation: 'Al dente spaghetti tossed in emulsified egg yolk and aged pecorino with crisp guanciale.',
-    suitableAssetIds: ['asset_carbonara_1'],
   },
   {
     id: 'dish_penne_arrabbiata',
@@ -139,7 +128,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'vegan',
     ingredients: ['penne pasta', 'crushed garlic', 'red chili flakes', 'san marzano tomatoes', 'parsley'],
     preparation: 'Penne quill pasta tossed in fiery garlic, chili, and San Marzano tomato pomodoro.',
-    suitableAssetIds: ['asset_penne_arrabbiata_1'],
   },
   {
     id: 'dish_tiramisu',
@@ -150,7 +138,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'veg',
     ingredients: ['ladyfingers', 'espresso', 'mascarpone cheese', 'cocoa powder', 'marsala'],
     preparation: 'Layers of espresso-soaked savoiardi ladyfingers and whipped mascarpone cream dusted with cocoa.',
-    suitableAssetIds: ['asset_tiramisu_1'],
   },
 
   // --- Japanese & East Asian ---
@@ -163,7 +150,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'non-veg',
     ingredients: ['ramen wheat noodles', 'rich pork broth', 'chashu pork belly', 'nitamago egg', 'nori', 'scallions'],
     preparation: 'Springy ramen noodles immersed in velvety 18-hour broth with soft-yolk egg.',
-    suitableAssetIds: ['asset_tonkotsu_ramen_1'],
   },
   {
     id: 'dish_sushi_combo',
@@ -174,7 +160,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'non-veg',
     ingredients: ['sushi rice', 'fresh salmon', 'bluefin tuna', 'nori', 'wasabi', 'pickled ginger'],
     preparation: 'Hand-pressed seasoned rice crowned with sashimi-grade fresh seafood slices.',
-    suitableAssetIds: [],
   },
   {
     id: 'dish_chicken_katsu_curry',
@@ -185,7 +170,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'non-veg',
     ingredients: ['crispy panko chicken breast', 'japanese curry roux', 'steamed rice', 'carrots', 'potatoes'],
     preparation: 'Golden breaded fried chicken cutlet served over rice with aromatic mild curry gravy.',
-    suitableAssetIds: [],
   },
   {
     id: 'dish_gyoza_dumplings',
@@ -196,7 +180,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'non-veg',
     ingredients: ['minced pork', 'cabbage', 'ginger', 'garlic', 'thin dumpling wrapper', 'sesame oil'],
     preparation: 'Delicate crescent dumplings steamed and pan-seared with a crispy lace skirt.',
-    suitableAssetIds: [],
   },
 
   // --- Mexican Specialties ---
@@ -209,7 +192,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'non-veg',
     ingredients: ['corn tortillas', 'achiote marinated pork', 'roasted pineapple', 'cilantro', 'white onion'],
     preparation: 'Thinly sliced spit-roasted pork served on double warm corn tortillas with pineapple.',
-    suitableAssetIds: [],
   },
   {
     id: 'dish_guacamole_chips',
@@ -220,7 +202,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'vegan',
     ingredients: ['hass avocados', 'fresh lime juice', 'cilantro', 'jalapeno', 'sea salt', 'crispy corn chips'],
     preparation: 'Chunky molcajete-mashed avocados infused with citrus, cilantro, and warm sea-salt chips.',
-    suitableAssetIds: [],
   },
   {
     id: 'dish_chicken_quesadilla',
@@ -231,7 +212,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'non-veg',
     ingredients: ['flour tortilla', 'seasoned grilled chicken', 'monterey jack cheese', 'pico de gallo', 'sour cream'],
     preparation: 'Toasted golden flour tortilla packed with shredded chipotle chicken and melted Oaxaca cheese.',
-    suitableAssetIds: [],
   },
   {
     id: 'dish_churros',
@@ -242,7 +222,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'veg',
     ingredients: ['choux pastry dough', 'cinnamon', 'sugar', 'dark chocolate dipping sauce'],
     preparation: 'Crisp fluted fried pastry rolled in fragrant cinnamon sugar served with warm Belgian chocolate.',
-    suitableAssetIds: [],
   },
 
   // --- Southeast Asian & Pan-Asian ---
@@ -255,7 +234,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'non-veg',
     ingredients: ['rice noodles', 'tamarind paste', 'shrimp', 'tofu', 'crushed peanuts', 'bean sprouts', 'lime'],
     preparation: 'Wok-tossed rice noodles with tamarind reduction, egg, crispy tofu, and crushed peanuts.',
-    suitableAssetIds: ['asset_pad_thai_1'],
   },
   {
     id: 'dish_tom_yum_goong',
@@ -266,7 +244,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'non-veg',
     ingredients: ['tiger prawns', 'lemongrass', 'galangal', 'kaffir lime leaves', 'straw mushrooms', 'thai chili'],
     preparation: 'Aromatic spicy and sour herbal broth brimming with wild tiger prawns and fresh herbs.',
-    suitableAssetIds: [],
   },
   {
     id: 'dish_pho_bo',
@@ -277,7 +254,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'non-veg',
     ingredients: ['flat rice noodles', 'star anise beef bone broth', 'thinly sliced rare beef', 'thai basil', 'bean sprouts'],
     preparation: 'Fragrant 12-hour spiced bone broth poured over silky flat rice noodles and tender beef.',
-    suitableAssetIds: [],
   },
 
   // --- American & European Classics ---
@@ -290,7 +266,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'non-veg',
     ingredients: ['brioche bun', 'ground beef patty', 'aged cheddar', 'lettuce', 'tomato', 'house sauce'],
     preparation: 'Grilled prime beef patty melted with sharp cheddar on toasted buttered brioche.',
-    suitableAssetIds: ['asset_cheeseburger_1'],
   },
   {
     id: 'dish_buffalo_wings',
@@ -301,7 +276,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'non-veg',
     ingredients: ['chicken wings', 'cayenne pepper hot sauce', 'butter', 'celery sticks', 'blue cheese dip'],
     preparation: 'Deep-fried crispy wings glazed in tangy cayenne butter hot sauce with cool blue cheese dip.',
-    suitableAssetIds: [],
   },
   {
     id: 'dish_caesar_salad',
@@ -312,7 +286,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'veg',
     ingredients: ['crisp romaine lettuce', 'garlic croutons', 'parmesan shavings', 'caesar dressing'],
     preparation: 'Chilled romaine hearts tossed in creamy anchovy-free parmesan dressing with golden croutons.',
-    suitableAssetIds: ['asset_caesar_salad_1'],
   },
   {
     id: 'dish_croissant',
@@ -323,7 +296,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'veg',
     ingredients: ['laminated yeast dough', 'french cultured butter', 'egg wash', 'sea salt'],
     preparation: 'Multi-layered flaky golden pastry with airy honeycomb crumb and rich buttery aroma.',
-    suitableAssetIds: [],
   },
   {
     id: 'dish_french_onion_soup',
@@ -334,7 +306,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'non-veg',
     ingredients: ['caramelized yellow onions', 'rich beef stock', 'french baguette slice', 'gruyere cheese'],
     preparation: 'Slow-caramelized onions in deep sherry beef broth topped with toasted baguette and broiled gruyère.',
-    suitableAssetIds: [],
   },
   {
     id: 'dish_falafel_wrap',
@@ -345,7 +316,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'vegan',
     ingredients: ['ground spiced chickpeas', 'fresh parsley', 'tahini sauce', 'pickled turnips', 'pita flatbread'],
     preparation: 'Golden herb-flecked chickpea fritters wrapped in warm pita with creamy garlic tahini.',
-    suitableAssetIds: [],
   },
   {
     id: 'dish_hummus_pita',
@@ -356,7 +326,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'vegan',
     ingredients: ['cooked chickpeas', 'sesame tahini', 'extra virgin olive oil', 'lemon juice', 'sumac', 'pita bread'],
     preparation: 'Velvety whipped chickpeas with pure sesame tahini, olive oil pool, and freshly baked pita.',
-    suitableAssetIds: [],
   },
 
   // --- Beverages & Desserts ---
@@ -369,7 +338,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'veg',
     ingredients: ['alphonso mango pulp', 'fresh yogurt', 'cardamom', 'pistachios'],
     preparation: 'Chilled blend of Alphonso mango purée and thick creamy yogurt with crushed green cardamom.',
-    suitableAssetIds: ['asset_mango_lassi_1'],
   },
   {
     id: 'dish_matcha_latte',
@@ -380,7 +348,6 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'veg',
     ingredients: ['ceremonial grade uji matcha', 'oat milk or dairy milk', 'organic agave', 'ice cubes'],
     preparation: 'Whisked Japanese ceremonial matcha layered over cold creamy milk with light natural sweetness.',
-    suitableAssetIds: [],
   },
   {
     id: 'dish_new_york_cheesecake',
@@ -391,6 +358,5 @@ export const CANONICAL_DISHES: CanonicalDish[] = [
     dietary: 'veg',
     ingredients: ['cream cheese', 'graham cracker crust', 'vanilla bean', 'sour cream topping', 'strawberry coulis'],
     preparation: 'Dense and creamy baked vanilla cheesecake with golden buttery graham cracker crust.',
-    suitableAssetIds: [],
   },
 ];

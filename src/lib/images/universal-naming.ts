@@ -14,7 +14,7 @@ const STOP_WORDS = new Set([
 ]);
 
 /**
- * Converts any raw dish title, user input, or filename into a clean,
+ * Converts a dish title or user input into a clean,
  * standardized universal food name and default filename (e.g. "margherita-pizza.webp").
  *
  * Examples:
@@ -22,17 +22,17 @@ const STOP_WORDS = new Set([
  * - "Delicious Classic Double Cheeseburger 4k" -> "classic-cheeseburger" -> "classic-cheeseburger.webp"
  * - "Slow-Cooked Dal Makhani with Butter" -> "dal-makhani" -> "dal-makhani.webp"
  */
-export function toUniversalFoodName(rawInput: string, fallbackSlug = 'food-dish'): {
+export function toUniversalFoodName(rawInput: string): {
   displayName: string;
   universalName: string;
   filename: string;
   matchedCanonicalName?: string;
 } {
-  if (!rawInput || typeof rawInput !== 'string') {
+  if (!rawInput || typeof rawInput !== 'string' || !rawInput.trim()) {
     return {
-      displayName: 'Food Dish',
-      universalName: fallbackSlug,
-      filename: `${fallbackSlug}.webp`,
+      displayName: '',
+      universalName: '',
+      filename: '',
     };
   }
 
@@ -69,10 +69,10 @@ export function toUniversalFoodName(rawInput: string, fallbackSlug = 'food-dish'
   const filtered = tokens.filter((t) => !STOP_WORDS.has(t));
   const finalTokens = filtered.length > 0 ? filtered.slice(0, 3) : tokens.slice(0, 3);
 
-  const universalName = (finalTokens.join('-') || fallbackSlug).toLowerCase();
+  const universalName = finalTokens.join('-').toLowerCase();
   const displayName = finalTokens
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ') || 'Food Dish';
+    .join(' ');
 
   return {
     displayName,

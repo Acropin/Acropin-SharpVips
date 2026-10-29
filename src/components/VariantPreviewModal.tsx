@@ -170,7 +170,7 @@ export function VariantPreviewModal({ asset, onClose }: VariantPreviewModalProps
         </div>
 
         <div className="px-6 py-3 border-t border-slate-800 bg-slate-950/40 flex justify-between items-center text-xs text-slate-400">
-          <div>Licensed under {asset.licenseType || 'CC0'} • Exif Sanitized</div>
+          <div>Licensed under {asset.licenseType} • EXIF metadata sanitized</div>
           <button
             onClick={onClose}
             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors"

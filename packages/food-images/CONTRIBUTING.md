@@ -14,7 +14,7 @@
 - Choose `CC0-1.0` or `CC-BY-4.0`. For CC-BY, include attribution text that downstream users can display.
 - Do not rely on a site's general terms or a URL that merely displays an image. Do not submit Unsplash, Pexels, stock-photo, or scraped images without explicit rights to redistribute them in this catalog.
 
-CI rejects invalid metadata, unsupported license identifiers, duplicate slugs, duplicate processed images, and files that cannot be safely normalized. Do not include generated WebP files or edit `dist/`.
+CI rejects invalid metadata, unsupported license identifiers, duplicate slugs, exact duplicate image files, near-duplicates within 6 bits of the 64-bit DCT perceptual hash, and files that cannot be safely normalized. The perceptual hash is a fast duplicate check; it cannot verify the image's license or prove AI generation. Do not include generated WebP files or edit `dist/`.
 
 The repository maintains an explicit npm install-script allowlist in the root `package.json`: only the lockfile-pinned `esbuild` install script is approved because the TypeScript build tool requires its platform binary. Other discovered dependency scripts remain denied.
 

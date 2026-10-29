@@ -51,6 +51,24 @@ const DEFAULT_REQUESTS_PER_DAY = 5_000;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const IMAGE_URL_TTL_SECONDS = 15 * 60;
 const VARIANT_SIZES = new Set(['480', '960', '1600']);
+const PROHIBITED_SOURCE_HOSTS = [
+  'unsplash.com', 'pexels.com', 'shutterstock.com', 'gettyimages.com',
+  'istockphoto.com', 'adobe.com', 'freepik.com',
+];
+
+function isRealHttpsUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    return url.protocol === 'https:' && !url.username && !url.password && !(
+      ['example', 'example.com', 'example.org', 'localhost', 'local', 'test', 'invalid'].includes(host) ||
+      ['.example', '.example.com', '.example.org', '.localhost', '.local', '.test', '.invalid']
+        .some((suffix) => host.endsWith(suffix))
+    );
+  } catch {
+    return false;
+  }
+}
 
 function json(data: unknown, status = 200, extraHeaders: HeadersInit = {}): Response {
   return new Response(JSON.stringify(data), {
@@ -462,19 +480,34 @@ async function handleAdmin(request: Request, env: Env, url: URL): Promise<Respon
     const category = typeof body.category === 'string' ? body.category.trim().slice(0, 80) : '';
     const creator = typeof body.creator === 'string' ? body.creator.trim().slice(0, 200) : '';
     const license = typeof body.license === 'string' ? body.license.trim().slice(0, 80) : '';
-    const tags = Array.isArray(body.tags) ? body.tags.filter((tag): tag is string => typeof tag === 'string').slice(0, 30) : [];
+    const tags = Array.isArray(body.tags)
+      ? [...new Set(body.tags.filter((tag): tag is string => typeof tag === 'string').map((tag) => tag.trim().toLowerCase()).filter(Boolean))].slice(0, 30)
+      : [];
     const attribution = typeof body.attribution === 'string' ? body.attribution.trim().slice(0, 500) : null;
     const sourceUrl = typeof body.sourceUrl === 'string' ? body.sourceUrl.trim().slice(0, 2048) : null;
     const licenseEvidenceUrl = typeof body.licenseEvidenceUrl === 'string' ? body.licenseEvidenceUrl.trim().slice(0, 2048) : null;
     const requestedSizes = Array.isArray(body.variantSizes)
       ? body.variantSizes.filter((size): size is string => typeof size === 'string')
       : null;
-    if (!dishName || !category || !creator || !license) return json({ error: 'dishName, category, creator, and license are required.' }, 400);
+    if (dishName.length < 2 || /replace with/i.test(dishName) || !category || !creator || !license || tags.length === 0) {
+      return json({ error: 'Provide a real dishName, category, creator, license, and at least one useful tag.' }, 400);
+    }
+    if (/your name|community contributor|rightsholder/i.test(creator)) {
+      return json({ error: 'Creator must identify the actual image creator or rightsholder.' }, 400);
+    }
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(category)) return json({ error: 'category must be lowercase kebab-case.' }, 400);
     if (license !== 'CC0-1.0' && license !== 'CC-BY-4.0') return json({ error: 'license must be CC0-1.0 or CC-BY-4.0.' }, 400);
     if (license === 'CC-BY-4.0' && !attribution) return json({ error: 'Attribution text is required for CC-BY-4.0.' }, 400);
-    for (const link of [sourceUrl, licenseEvidenceUrl]) {
-      if (link && !link.startsWith('https://')) return json({ error: 'Source and license evidence URLs must use HTTPS.' }, 400);
+    if (!sourceUrl || !licenseEvidenceUrl || !isRealHttpsUrl(sourceUrl) || !isRealHttpsUrl(licenseEvidenceUrl)) {
+      return json({ error: 'Provide real HTTPS source and image-specific license evidence URLs.' }, 400);
+    }
+    const source = new URL(sourceUrl);
+    const evidence = new URL(licenseEvidenceUrl);
+    if (source.toString() === evidence.toString()) {
+      return json({ error: 'The source link is not license evidence; provide a separate rights record.' }, 400);
+    }
+    if (PROHIBITED_SOURCE_HOSTS.some((host) => source.hostname === host || source.hostname.endsWith(`.${host}`))) {
+      return json({ error: 'Stock-image sources require image-specific redistribution permission.' }, 400);
     }
     if (requestedSizes && requestedSizes.some((size) => !VARIANT_SIZES.has(size))) {
       return json({ error: 'variantSizes may contain only 480, 960, and 1600.' }, 400);

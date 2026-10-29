@@ -14,6 +14,7 @@ export type LicenseType =
   | 'Custom-Commercial';
 
 export type DishDietary = 'veg' | 'non-veg' | 'vegan';
+export type DatasetTargetDietary = DishDietary | 'egg' | 'mixed' | 'unknown';
 
 export interface FocalPoint {
   x: number; // 0.0 to 1.0 (0.5 is center)
@@ -34,6 +35,7 @@ export interface ImageProcessingOptions {
 export interface ProcessedImageResult {
   buffer: Buffer; // Primary 480x480
   hash: string; // SHA-256
+  perceptualHash: string; // 64-bit DCT hash for near-duplicate detection
   width: number; // 480
   height: number; // 480
   format: 'webp';
@@ -61,11 +63,12 @@ export interface ProcessedImageResult {
 }
 
 export interface MlInspectionResult {
-  isFood: boolean;
-  matchesTargetDish: boolean;
+  verificationLevel: 'vision-model' | 'structural-check';
+  isFood: boolean | null;
+  matchesTargetDish: boolean | null;
   detectedDish: string;
   cuisine?: string;
-  qualityScore: number; // 0 - 100
+  qualityScore?: number; // 0 - 100; only provided by a vision model
   antiCorruptionPassed: boolean;
   rejectionReason?: string;
   reasoning?: string;
@@ -81,7 +84,7 @@ export interface AcropinMetadataTags {
   variantsAvailable: string[];
   license: string;
   contributorGitHub?: string;
-  dcoSignOff?: string;
+  rightsAttested?: boolean;
   mlVerified: boolean;
   timestamp: string;
 }
@@ -101,6 +104,7 @@ export interface ImageAsset {
   hiResUrl?: string; // stable public full-res URL (1600x1600)
   hiResByteSize?: number;
   sha256Hash: string;
+  perceptualHash?: string; // Optional for older catalog records awaiting index migration
   width: number; // 480
   height: number; // 480
   format: 'webp';
@@ -110,6 +114,8 @@ export interface ImageAsset {
   licenseType: LicenseType;
   licenseEvidence: string; // URL, document ref or terms
   requiredAttribution?: string;
+  rightsAttested?: boolean;
+  rightsAttestedAt?: string;
   processingVersion: string; // 'v1'
   processingQuality: number;
   focalPoint: FocalPoint;
@@ -124,8 +130,7 @@ export interface ImageAsset {
   originalByteSize?: number;
   // Contributor DCO & GitHub Info
   contributorGitHub?: string;
-  contributorDcoEmail?: string;
-  dcoSignOff?: string;
+  contributorId?: string;
   // Real-time ML Anti-Corruption Verification
   mlInspection?: MlInspectionResult;
   // Acropin Universal Metadata Tag System
@@ -136,9 +141,10 @@ export interface DatasetTargetItem {
   id: string;
   name: string;
   universalSlug: string;
-  region: string; // e.g. 'North Indian', 'South Indian', 'Pan-Indian', 'Italian', 'Global'
+  region?: string; // Only set when the contributor provides a region.
   category: string;
-  dietary: DishDietary;
+  dietary: DatasetTargetDietary;
+  sourceIds?: string[];
   ingredients?: string[];
   notes?: string;
   createdAt: string;
@@ -153,7 +159,6 @@ export interface CanonicalDish {
   dietary: DishDietary;
   ingredients: string[];
   preparation?: string;
-  suitableAssetIds: string[];
 }
 
 export type AssignmentMethod =

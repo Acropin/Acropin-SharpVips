@@ -8,12 +8,11 @@ import { GoogleGenAI } from '@google/genai';
 import type { MlInspectionResult } from '../images/types.js';
 
 /**
- * Heuristic fallback Computer Vision analyzer when Gemini API is offline or unconfigured.
- * Evaluates image entropy, color variance, pixel contrast, and semantic food terms.
+ * Structural fallback used when the vision service is unavailable. It can reject
+ * unreadable, undersized, or nearly blank files, but cannot identify food.
  */
 async function fallbackCvInspection(
-  buffer: Buffer,
-  targetDish: string
+  buffer: Buffer
 ): Promise<MlInspectionResult> {
   const now = new Date().toISOString();
   try {
@@ -23,14 +22,14 @@ async function fallbackCvInspection(
     // Check 1: Image dimension and channel health
     if (!meta.width || !meta.height || meta.width < 100 || meta.height < 100) {
       return {
-        isFood: false,
-        matchesTargetDish: false,
+        verificationLevel: 'structural-check',
+        isFood: null,
+        matchesTargetDish: null,
         detectedDish: 'Corrupt / Undersized Image',
-        qualityScore: 10,
         antiCorruptionPassed: false,
-        rejectionReason: 'Dataset integrity rejection: Image resolution is corrupt or under minimal threshold.',
+        rejectionReason: 'Image dimensions are below the minimum 100 × 100 pixel requirement.',
         reasoning: 'Buffer dimensions failed basic structural checks.',
-        modelUsed: 'acropin-cv-heuristic-v1',
+        modelUsed: 'sharp-structural-checks-v1',
         inspectedAt: now,
       };
     }
@@ -41,46 +40,37 @@ async function fallbackCvInspection(
 
     if (avgStdDev < 8) {
       return {
-        isFood: false,
-        matchesTargetDish: false,
+        verificationLevel: 'structural-check',
+        isFood: null,
+        matchesTargetDish: null,
         detectedDish: 'Blank or Solid Color Pattern',
-        qualityScore: 15,
         antiCorruptionPassed: false,
-        rejectionReason: 'Dataset anti-corruption rejection: Image appears to be a blank or monochromatic artificial canvas.',
+        rejectionReason: 'Image is almost entirely one color and does not pass the structural image check.',
         reasoning: `Channel standard deviation too low (${avgStdDev.toFixed(1)} < 8.0).`,
-        modelUsed: 'acropin-cv-heuristic-v1',
+        modelUsed: 'sharp-structural-checks-v1',
         inspectedAt: now,
       };
     }
 
-    // Basic heuristic scoring
-    const normalizedName = targetDish.toLowerCase().trim();
-    const isBeverage = /lassi|juice|smoothie|coffee|tea|shake|soda|drink|cocktail|soup/i.test(normalizedName);
-    const isDessert = /cake|pie|ice cream|tiramisu|jamun|halwa|cookie|churros|pastry/i.test(normalizedName);
-
-    // Baseline food quality score
-    const qualityScore = Math.min(95, Math.max(55, Math.round(50 + avgStdDev * 0.5)));
-
     return {
-      isFood: true,
-      matchesTargetDish: true,
-      detectedDish: targetDish || 'Prepared Food Item',
-      cuisine: isBeverage ? 'Beverages' : isDessert ? 'Desserts' : 'International Cuisine',
-      qualityScore,
+      verificationLevel: 'structural-check',
+      isFood: null,
+      matchesTargetDish: null,
+      detectedDish: 'Not evaluated without a vision model',
       antiCorruptionPassed: true,
-      reasoning: 'Image passes structural Computer Vision variance and color complexity criteria.',
-      modelUsed: 'acropin-cv-heuristic-v1',
+      reasoning: `Basic image structure passed (average channel deviation ${avgStdDev.toFixed(1)}); food, dish match, and visual quality have not been evaluated. Human review is required.`,
+      modelUsed: 'sharp-structural-checks-v1',
       inspectedAt: now,
     };
   } catch (err) {
     return {
-      isFood: false,
-      matchesTargetDish: false,
+      verificationLevel: 'structural-check',
+      isFood: null,
+      matchesTargetDish: null,
       detectedDish: 'Unreadable Buffer',
-      qualityScore: 0,
       antiCorruptionPassed: false,
       rejectionReason: `Image buffer failed binary validation: ${err instanceof Error ? err.message : String(err)}`,
-      modelUsed: 'acropin-cv-heuristic-v1',
+      modelUsed: 'sharp-structural-checks-v1',
       inspectedAt: now,
     };
   }
@@ -98,13 +88,13 @@ export async function inspectFoodImageWithMl(
   const now = new Date().toISOString();
   const apiKey = process.env.GEMINI_API_KEY;
 
-  // If no Gemini API key configured, use the Computer Vision heuristic fallback
-  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
-    return fallbackCvInspection(imageBuffer, targetDish);
+  // Structural checks cannot verify food content; accepted uploads still require review.
+  if (!apiKey?.trim()) {
+    return fallbackCvInspection(imageBuffer);
   }
 
   try {
-    const ai = new GoogleGenAI();
+    const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
     // Convert to a small WebP representation for ultra-fast Gemini Vision analysis
     const inspectionBuffer = await sharp(imageBuffer)
       .resize(512, 512, { fit: 'inside' })
@@ -139,7 +129,7 @@ CRITICAL RULES:
 4. "anti_corruption_passed": MUST be false if is_food is false OR matches_target_dish is false OR quality_score < 40.
 5. "rejection_reason": If anti_corruption_passed is false, explain succinctly why the upload is rejected (e.g., "Detected non-food item: screenshot or device photo.", "Dish mismatch: image shows tacos, but target dish is Tonkotsu Ramen.", "Image resolution or lighting is severely degraded."). If passed, return null.`;
 
-    const geminiCall = ai.models.generateContent({
+    const response = await ai.models.generateContent({
       model: 'gemini-3.8-flash',
       contents: [
         {
@@ -160,32 +150,52 @@ CRITICAL RULES:
       config: {
         responseMimeType: 'application/json',
         temperature: 0.1,
+        abortSignal: AbortSignal.timeout(8000),
       },
     });
 
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Gemini API call timed out after 8s')), 8000)
-    );
-
-    const response = await Promise.race([geminiCall, timeoutPromise]);
-
     const text = response.text?.trim() || '{}';
-    const parsed = JSON.parse(text);
+    const parsed: unknown = JSON.parse(text);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('Vision response did not contain a JSON object.');
+    }
+    const result = parsed as Record<string, unknown>;
+    if (
+      typeof result.is_food !== 'boolean' ||
+      typeof result.matches_target_dish !== 'boolean' ||
+      typeof result.detected_dish !== 'string' ||
+      typeof result.quality_score !== 'number' ||
+      !Number.isInteger(result.quality_score) ||
+      result.quality_score < 0 ||
+      result.quality_score > 100 ||
+      typeof result.anti_corruption_passed !== 'boolean'
+    ) {
+      throw new Error('Vision response did not match the required inspection schema.');
+    }
+
+    const isFood = result.is_food;
+    const matchesTargetDish = result.matches_target_dish;
+    const qualityScore = result.quality_score;
+    const antiCorruptionPassed =
+      result.anti_corruption_passed && isFood && matchesTargetDish && qualityScore >= 40;
 
     return {
-      isFood: Boolean(parsed.is_food),
-      matchesTargetDish: Boolean(parsed.matches_target_dish),
-      detectedDish: String(parsed.detected_dish || targetDish),
-      cuisine: parsed.cuisine ? String(parsed.cuisine) : undefined,
-      qualityScore: typeof parsed.quality_score === 'number' ? parsed.quality_score : 75,
-      antiCorruptionPassed: Boolean(parsed.anti_corruption_passed),
-      rejectionReason: parsed.rejection_reason || (parsed.anti_corruption_passed ? undefined : 'Flagged by dataset anti-corruption filter'),
-      reasoning: parsed.reasoning || '',
-      modelUsed: 'gemini-3.8-flash',
+      verificationLevel: 'vision-model',
+      isFood,
+      matchesTargetDish,
+      detectedDish: result.detected_dish.trim() || 'Unidentified food',
+      cuisine: typeof result.cuisine === 'string' ? result.cuisine : undefined,
+      qualityScore,
+      antiCorruptionPassed,
+      rejectionReason: typeof result.rejection_reason === 'string'
+        ? result.rejection_reason
+        : (antiCorruptionPassed ? undefined : 'Vision checks did not pass the food, dish match, or quality requirements.'),
+      reasoning: typeof result.reasoning === 'string' ? result.reasoning : '',
+      modelUsed: response.modelVersion || 'gemini-3.8-flash',
       inspectedAt: now,
     };
   } catch (apiError) {
-    console.warn('Gemini ML inspection encountered error, using CV fallback:', apiError);
-    return fallbackCvInspection(imageBuffer, targetDish);
+    console.warn('Vision inspection unavailable; falling back to structural image checks:', apiError);
+    return fallbackCvInspection(imageBuffer);
   }
 }

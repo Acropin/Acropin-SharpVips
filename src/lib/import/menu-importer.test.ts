@@ -5,17 +5,37 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { initializeCatalog, registerAsset } from '../server/catalog-store';
 import { initializeRestaurants, getRestaurantMenu, updateMenuItemAssignment, saveRestaurantMenu } from '../server/restaurant-store';
-import { generateImportPreview, commitMenuImport } from './menu-importer';
+import { generateImportPreview, commitMenuImport, normalizeMenuInput } from './menu-importer';
+
+test('menu importer rejects missing production fields instead of inventing defaults', () => {
+  assert.throws(
+    () => normalizeMenuInput([{ name: 'Soup', price: 8 }]),
+    /required "category" field/
+  );
+  assert.throws(
+    () => normalizeMenuInput([{ name: 'Soup', category: 'Mains' }]),
+    /valid non-negative price/
+  );
+  assert.throws(
+    () => generateImportPreview('unconfigured-restaurant', []),
+    /is not configured/
+  );
+});
+
+function fixtureHash(name: string): string {
+  return createHash('sha256').update('menu-import-test:' + name).digest('hex');
+}
 
 test('menu importer lifecycle: preview, auto-assign, preserve, and lock', async () => {
   // 1. Initialize stores
   await initializeCatalog();
-  initializeRestaurants();
+  await initializeRestaurants();
 
   // Register fixture assets for the test lifecycle
-  registerAsset({
+  await registerAsset({
     id: 'asset_paneer_butter_masala_1',
     universalName: 'paneer-butter-masala',
     filename: 'paneer-butter-masala.webp',
@@ -23,12 +43,12 @@ test('menu importer lifecycle: preview, auto-assign, preserve, and lock', async 
     canonicalDishId: 'dish_paneer_butter_masala',
     storageKey: 'food-assets/paneer-butter-masala/480.webp',
     publicUrl: '/api/images/food-assets/paneer-butter-masala/480.webp',
-    sha256Hash: 'dummyhash1',
+    sha256Hash: fixtureHash('paneer-butter-masala'),
     width: 480,
     height: 480,
     format: 'webp',
     byteSize: 25000,
-    sourceProvider: 'Test Provider',
+    sourceProvider: 'test-only fixture',
     licenseType: 'CC0',
     licenseEvidence: 'Test Evidence',
     processingVersion: 'v1',
@@ -40,7 +60,7 @@ test('menu importer lifecycle: preview, auto-assign, preserve, and lock', async 
     tags: ['fixture'],
   });
 
-  registerAsset({
+  await registerAsset({
     id: 'asset_margherita_pizza_1',
     universalName: 'margherita-pizza',
     filename: 'margherita-pizza.webp',
@@ -48,12 +68,12 @@ test('menu importer lifecycle: preview, auto-assign, preserve, and lock', async 
     canonicalDishId: 'dish_margherita_pizza',
     storageKey: 'food-assets/margherita-pizza/480.webp',
     publicUrl: '/api/images/food-assets/margherita-pizza/480.webp',
-    sha256Hash: 'dummyhash2',
+    sha256Hash: fixtureHash('margherita-pizza'),
     width: 480,
     height: 480,
     format: 'webp',
     byteSize: 22000,
-    sourceProvider: 'Test Provider',
+    sourceProvider: 'test-only fixture',
     licenseType: 'CC0',
     licenseEvidence: 'Test Evidence',
     processingVersion: 'v1',
@@ -65,7 +85,7 @@ test('menu importer lifecycle: preview, auto-assign, preserve, and lock', async 
     tags: ['fixture'],
   });
 
-  registerAsset({
+  await registerAsset({
     id: 'asset_tiramisu_1',
     universalName: 'tiramisu',
     filename: 'tiramisu.webp',
@@ -73,12 +93,12 @@ test('menu importer lifecycle: preview, auto-assign, preserve, and lock', async 
     canonicalDishId: 'dish_tiramisu',
     storageKey: 'food-assets/tiramisu/480.webp',
     publicUrl: '/api/images/food-assets/tiramisu/480.webp',
-    sha256Hash: 'dummyhash3',
+    sha256Hash: fixtureHash('tiramisu'),
     width: 480,
     height: 480,
     format: 'webp',
     byteSize: 28000,
-    sourceProvider: 'Test Provider',
+    sourceProvider: 'test-only fixture',
     licenseType: 'CC0',
     licenseEvidence: 'Test Evidence',
     processingVersion: 'v1',
