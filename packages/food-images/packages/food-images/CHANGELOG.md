@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/Acropin/Acropin-SharpVips/compare/food-images-v0.2.0...food-images-v0.3.0) (2026-10-29)
+
+
+### Features
+
+* complete food library workflows and contributor rewards ([a93370b](https://github.com/Acropin/Acropin-SharpVips/commit/a93370b8a4bd63c9eda2083771bdd9b0000277e3))
+
 ## [0.2.0](https://github.com/Acropin/Acropin-SharpVips/compare/food-images-v0.1.0...food-images-v0.2.0) (2026-10-28)
 
 
