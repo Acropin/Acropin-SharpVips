@@ -35,7 +35,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm install --global npm@12
-      - run: npm ci
+      - run: npm ci --allow-remote=root
       - run: npm run build:food-images
       - run: npm publish --workspace packages/food-images --access public --provenance
         env:
