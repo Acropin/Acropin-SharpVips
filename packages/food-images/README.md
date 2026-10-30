@@ -1,6 +1,6 @@
 # `acropin-food-images`
 
-An open, community-maintained catalog of normalized food images for restaurant menus and food applications. Each published image has a 480 × 480 WebP; 960 × 960 and 1600 × 1600 variants are generated when the source resolution supports them. Catalog entries include dish name, category, tags, source, and per-image license information.
+An open, community-maintained catalog of food images for restaurant menus and food applications. Images keep their original aspect ratio and full frame. The npm package includes WebP tiers with maximum edges of 480 px, and 960 px / 1600 px when the source supports them. Each tier is encoded directly from the original without a forced file-size target or upscaling. Catalog entries include dish name, category, tags, source, and per-image license information.
 
 ## Install
 
@@ -52,7 +52,7 @@ if (firstPage.nextOffset !== null) {
 }
 ```
 
-The API returns signed image URLs for the available 480, 960, and 1600 px WebP variants, along with the contributor/creator, source, license, and attribution. The default page size is 24 and the maximum is 50; use `nextOffset` to fetch later catalog pages. Links expire after 15 minutes; call `list()` or `get(slug)` again if an image URL expires. The API requires contact approval. Community contributors submit pull requests; approved merges sync the generated catalog and image variants to the managed API automatically once its deployment secrets are configured.
+The API returns signed URLs for on-demand 128, 480, 960, and 1600 px maximum-edge images when the source has enough pixels, along with the contributor/creator, source, license, and attribution. It stores one lossless WebP master in R2 and generates the requested size and WebP, AVIF, JPEG, or PNG format when fetched; it does not save a copy for each size or format. The default page size is 24 and the maximum is 50; use `nextOffset` to fetch later catalog pages. Links expire after 15 minutes; call `list()` or `get(slug)` again if an image URL expires. The API requires contact approval. Community contributors submit pull requests; approved merges sync the catalog and single master to the managed API automatically once its deployment secrets are configured.
 
 Image URLs point to the immutable npm package version on jsDelivr. Metadata is available locally from `foodImages` or `./catalog.json`; the 480 px WebP can be imported with `acropin-food-images/assets/<slug>.webp`, and variants with `acropin-food-images/assets/<slug>/<size>.webp` in bundlers that support asset imports.
 
@@ -65,9 +65,10 @@ flowchart LR
   C[Contributor adds source image and metadata] --> PR[GitHub pull request]
   PR --> R[Maintainer reviews rights, attribution, and image]
   R --> V[CI validates license, dimensions, slug, and duplicates]
-  V --> P[Sharp creates 480px and source-supported 960px / 1600px WebP variants]
-  P --> M[Generated image files and catalog]
-  M --> CF[After merge, GitHub Actions syncs approved entries to Cloudflare D1 and R2]
+  V --> P[Sharp creates uncropped 480px and source-supported 960px / 1600px variants]
+  P --> M[WebP tiers and catalog for npm]
+  M --> CF[After merge, GitHub Actions stores one lossless WebP master in R2]
+  CF --> API[API creates requested size and format on demand]
   M --> RP[Release Please opens a versioned release PR]
   RP --> N[npm publishes acropin-food-images]
   N --> U[App installs package and looks up dish image]
@@ -80,10 +81,11 @@ The web app's menu image library also reads the generated package catalog. Image
 
 ## Image and licensing requirements
 
+- Source images may be JPEG/JPG, PNG, WebP, AVIF, TIFF, or HEIF/HEIC. The CI pipeline normalizes each approved source to a lossless WebP master for the shared API.
 - Submit an image you created, or an image for which you have documented rights to redistribute under `CC0-1.0` or `CC-BY-4.0`.
 - Include a working HTTPS source URL, creator/rightsholder, and image-specific license evidence URL. For `CC-BY-4.0`, provide the required attribution text.
 - Do not contribute Unsplash, Pexels, stock-site, or other images unless the rightsholder explicitly grants redistribution rights for this image library and the evidence is included. A site's general download license is not evidence that images can be repackaged into a competing image catalog.
-- Provide a clear food photo at least 300 × 300 px and no larger than 15 MB. CI processes accepted inputs into metadata-stripped, square WebP assets; 960 px and 1600 px variants are created only when the source is at least that large. Do not commit generated output.
+- Provide a clear food photo at least 300 × 300 px, with a longest edge of at least 480 px, and no larger than 15 MB. CI keeps the original source in the contribution folder and creates metadata-stripped WebP files directly from it. Outputs preserve the complete image and its aspect ratio, do not upscale, and use high quality without shrinking quality to hit an arbitrary byte limit. 960 px and 1600 px npm tiers are created only when the source longest edge supports them. Do not commit generated output.
 - Use a unique lowercase kebab-case folder slug, such as `margherita-pizza`.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full checklist and release flow.

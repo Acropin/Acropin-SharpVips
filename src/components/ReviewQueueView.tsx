@@ -107,7 +107,7 @@ export function ReviewQueueView({
                   <img
                     src={asset.thumbnailUrl || asset.publicUrl}
                     alt={asset.dishName}
-                    className="w-28 h-28 object-cover rounded-lg border border-slate-700 shadow-md"
+                    className="w-28 h-28 object-contain rounded-lg border border-slate-700 shadow-md"
                   />
                   <button
                     onClick={() => onViewVariants(asset)}

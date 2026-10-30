@@ -44,8 +44,6 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadPreviewUrl, setUploadPreviewUrl] = useState<string | null>(null);
-  const [focalX, setFocalX] = useState<number>(0.5);
-  const [focalY, setFocalY] = useState<number>(0.5);
   const [dishNameInput, setDishNameInput] = useState('');
   const [licenseTypeInput, setLicenseTypeInput] = useState<LicenseType>('Studio-Acropin-Proprietary');
   const [licenseEvidenceInput, setLicenseEvidenceInput] = useState('');
@@ -137,14 +135,6 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({
     }
   };
 
-  const handleFocalPointClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
-    setFocalX(Number(x.toFixed(2)));
-    setFocalY(Number(y.toFixed(2)));
-  };
-
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!uploadFile) return;
@@ -155,8 +145,6 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({
     const formData = new FormData();
     formData.append('image', uploadFile);
     formData.append('dishName', dishNameInput);
-    formData.append('focalPointX', focalX.toString());
-    formData.append('focalPointY', focalY.toString());
     formData.append('licenseType', licenseTypeInput);
     formData.append('licenseEvidence', licenseEvidenceInput || 'Internal studio production');
     formData.append('requiredAttribution', attributionInput);
@@ -176,7 +164,7 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({
 
       setUploadFeedback({
         type: 'success',
-        message: `Successfully processed 480x480 WebP! Output size: ${(data.asset.byteSize / 1024).toFixed(1)} KB (Quality: ${data.asset.processingQuality}). ${data.isDeduplicated ? 'Identical content hash deduplicated.' : ''}`,
+        message: `Stored one full-frame original. ${data.asset.width}×${data.asset.height} WebP is generated on demand at quality ${data.asset.processingQuality}.`,
       });
 
       fetchAssets();
@@ -241,7 +229,7 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({
             <Layers className="w-6 h-6 text-amber-500" /> Centralized Food Image Library
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Standardized 480 × 480 WebP assets with licensing provenance and cross-tenant deduplication.
+            Full-frame originals with on-demand image delivery, licensing provenance, and cross-tenant deduplication.
           </p>
         </div>
 
@@ -324,7 +312,7 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({
                     src={asset.publicUrl}
                     alt={asset.dishName}
                     loading="lazy"
-                    className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
+                    className="w-full h-full object-contain transition duration-300"
                   />
 
                   {/* Status Badge */}
@@ -386,25 +374,17 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              {/* 480x480 Preview */}
+              {/* Full-frame primary variant preview */}
               <div>
                 <div className="aspect-square w-full rounded-xl overflow-hidden bg-black border border-slate-800 relative">
                   <img
                     src={selectedAsset.publicUrl}
                     alt={selectedAsset.dishName}
-                    className="w-full h-full object-cover"
-                  />
-                  {/* Focal point indicator */}
-                  <div
-                    className="absolute w-4 h-4 border-2 border-amber-400 rounded-full -translate-x-1/2 -translate-y-1/2 pointer-events-none shadow-md"
-                    style={{
-                      left: `${selectedAsset.focalPoint.x * 100}%`,
-                      top: `${selectedAsset.focalPoint.y * 100}%`,
-                    }}
+                    className="w-full h-full object-contain"
                   />
                 </div>
                 <p className="text-[11px] text-slate-500 mt-1 text-center font-mono">
-                  Exact Output: 480 × 480 px (WebP • sRGB)
+                  Full image: {selectedAsset.width} × {selectedAsset.height} px (WebP • sRGB)
                 </p>
               </div>
 
@@ -446,12 +426,6 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({
                   <div className="flex justify-between">
                     <span className="text-slate-500">Quality Used:</span>
                     <span>{selectedAsset.processingQuality} / 100</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Focal Point:</span>
-                    <span>
-                      ({selectedAsset.focalPoint.x.toFixed(2)}, {selectedAsset.focalPoint.y.toFixed(2)})
-                    </span>
                   </div>
                   <div>
                     <span className="text-slate-500">SHA-256 Hash:</span>
@@ -553,14 +527,14 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({
             </div>
 
             <form onSubmit={handleUploadSubmit} className="space-y-4">
-              {/* File selector & Interactive Focal Point Picker */}
+              {/* File selector and uncropped preview */}
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  1. Select Source Image (JPG, PNG, WebP — Min 300px, Max 15MB)
+                  1. Select Source Image (JPEG, PNG, WebP, AVIF, TIFF, HEIF/HEIC — minimum 300px per edge; max 15MB)
                 </label>
                 <input
                   type="file"
-                  accept="image/jpeg,image/png,image/webp"
+                  accept="image/jpeg,image/png,image/webp,image/avif,image/tiff,image/heif,image/heic,.jpg,.jpeg,.png,.webp,.avif,.tif,.tiff,.heif,.heic"
                   onChange={handleFileSelect}
                   className="w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-amber-400 hover:file:bg-slate-700 cursor-pointer"
                 />
@@ -568,27 +542,15 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({
                 {uploadPreviewUrl && (
                   <div className="mt-3">
                     <div className="text-[11px] text-slate-400 mb-1 flex items-center justify-between">
-                      <span>Click image to position square focal crop:</span>
-                      <span className="font-mono text-amber-400">
-                        X: {focalX.toFixed(2)}, Y: {focalY.toFixed(2)}
-                      </span>
+                      <span>Full image preview · no crop</span>
                     </div>
                     <div
-                      onClick={handleFocalPointClick}
-                      className="relative w-full max-h-56 bg-black rounded-xl overflow-hidden cursor-crosshair border border-slate-800 flex items-center justify-center"
+                      className="relative w-full h-56 bg-black rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center"
                     >
                       <img
                         src={uploadPreviewUrl}
                         alt="Upload preview"
-                        className="max-h-56 object-contain"
-                      />
-                      {/* Focal Indicator Crosshair */}
-                      <div
-                        className="absolute w-6 h-6 border-2 border-amber-400 bg-amber-400/20 rounded-full -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-                        style={{
-                          left: `${focalX * 100}%`,
-                          top: `${focalY * 100}%`,
-                        }}
+                        className="max-w-full max-h-full object-contain"
                       />
                     </div>
                   </div>
@@ -699,7 +661,7 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Processing with Sharp...
                     </>
                   ) : (
-                    'Process 480x480 WebP & Save'
+                    'Store Original & Save'
                   )}
                 </button>
               </div>

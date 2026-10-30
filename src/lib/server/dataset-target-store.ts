@@ -384,10 +384,10 @@ export function computeDatasetStatus(
         asset: matchedApproved,
       });
 
-      const variants: string[] = ['480x480'];
-      if (matchedApproved.thumbnailUrl) variants.unshift('128x128');
-      if (matchedApproved.retinaUrl) variants.push('960x960');
-      if (matchedApproved.hiResUrl) variants.push('1600x1600');
+      const variants: string[] = [`${matchedApproved.width}x${matchedApproved.height}`];
+      if (matchedApproved.thumbnailUrl) variants.unshift(`${matchedApproved.thumbnailWidth ?? 128}x${matchedApproved.thumbnailHeight ?? 128}`);
+      if (matchedApproved.retinaUrl) variants.push(`${matchedApproved.retinaWidth ?? 960}x${matchedApproved.retinaHeight ?? 960}`);
+      if (matchedApproved.hiResUrl) variants.push(`${matchedApproved.hiResWidth ?? 1600}x${matchedApproved.hiResHeight ?? 1600}`);
 
       rows.push({
         id: target.id,
@@ -419,10 +419,10 @@ export function computeDatasetStatus(
       });
     } else if (matchedPending) {
       categoryStats[cat].missing++;
-      const variants: string[] = ['480x480'];
-      if (matchedPending.thumbnailUrl) variants.unshift('128x128');
-      if (matchedPending.retinaUrl) variants.push('960x960');
-      if (matchedPending.hiResUrl) variants.push('1600x1600');
+      const variants: string[] = [`${matchedPending.width}x${matchedPending.height}`];
+      if (matchedPending.thumbnailUrl) variants.unshift(`${matchedPending.thumbnailWidth ?? 128}x${matchedPending.thumbnailHeight ?? 128}`);
+      if (matchedPending.retinaUrl) variants.push(`${matchedPending.retinaWidth ?? 960}x${matchedPending.retinaHeight ?? 960}`);
+      if (matchedPending.hiResUrl) variants.push(`${matchedPending.hiResWidth ?? 1600}x${matchedPending.hiResHeight ?? 1600}`);
 
       rows.push({
         id: target.id,
@@ -464,10 +464,10 @@ export function computeDatasetStatus(
     const slug = asset.universalName.toLowerCase();
     const alreadyListed = rows.some((r) => r.universalSlug.toLowerCase() === slug);
     if (!alreadyListed) {
-      const variants: string[] = ['480x480'];
-      if (asset.thumbnailUrl) variants.unshift('128x128');
-      if (asset.retinaUrl) variants.push('960x960');
-      if (asset.hiResUrl) variants.push('1600x1600');
+      const variants: string[] = [`${asset.width}x${asset.height}`];
+      if (asset.thumbnailUrl) variants.unshift(`${asset.thumbnailWidth ?? 128}x${asset.thumbnailHeight ?? 128}`);
+      if (asset.retinaUrl) variants.push(`${asset.retinaWidth ?? 960}x${asset.retinaHeight ?? 960}`);
+      if (asset.hiResUrl) variants.push(`${asset.hiResWidth ?? 1600}x${asset.hiResHeight ?? 1600}`);
 
       rows.push({
         id: asset.id,

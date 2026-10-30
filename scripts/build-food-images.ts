@@ -5,6 +5,7 @@
  */
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { processFoodImage } from '../src/lib/images/process-image.js';
 import {
@@ -29,7 +30,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const packageRoot = path.join(root, 'packages/food-images');
 const contributionsRoot = path.join(packageRoot, 'contributions');
 const outputRoot = path.join(packageRoot, 'dist');
-const sourceExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp', '.avif', '.tif', '.tiff', '.heif']);
+const sourceExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp', '.avif', '.tif', '.tiff', '.heif', '.heic']);
 const prohibitedSourceHosts = [
   'unsplash.com',
   'pexels.com',
@@ -193,8 +194,8 @@ async function main() {
     }
     perceptualHashes.push({ slug, hash: processed.perceptualHash });
 
-    const sourceMaxSquareSize = Math.min(processed.sourceDimensions.width, processed.sourceDimensions.height);
-    const availableSizes = variantSizes.filter((size) => size === 480 || size <= sourceMaxSquareSize);
+    const sourceMaxEdge = Math.max(processed.sourceDimensions.width, processed.sourceDimensions.height);
+    const availableSizes = variantSizes.filter((size) => size <= sourceMaxEdge);
     const variants: Record<string, Record<string, unknown>> = {};
     const variantsDir = path.join(outputRoot, 'assets', slug);
     await fs.mkdir(variantsDir, { recursive: true });
@@ -202,14 +203,33 @@ async function main() {
 
     for (const size of availableSizes) {
       const variant = size === 480
-        ? processed
-        : await processFoodImage(original, {
-            width: size,
-            height: size,
-            initialQuality: 78,
-            effort: 5,
-            focalPoint: metadata.focalPoint,
-          });
+        ? {
+            buffer: processed.buffer,
+            width: processed.width,
+            height: processed.height,
+            format: processed.format,
+            hash: processed.hash,
+            byteSize: processed.byteSize,
+          }
+        : size === 960 && processed.retinaBuffer && processed.retinaWidth && processed.retinaHeight
+          ? {
+              buffer: processed.retinaBuffer,
+              width: processed.retinaWidth,
+              height: processed.retinaHeight,
+              format: processed.format,
+              hash: createHash('sha256').update(processed.retinaBuffer).digest('hex'),
+              byteSize: processed.retinaBuffer.length,
+            }
+          : size === 1600 && processed.hiResBuffer && processed.hiResWidth && processed.hiResHeight
+            ? {
+                buffer: processed.hiResBuffer,
+                width: processed.hiResWidth,
+                height: processed.hiResHeight,
+                format: processed.format,
+                hash: createHash('sha256').update(processed.hiResBuffer).digest('hex'),
+                byteSize: processed.hiResBuffer.length,
+              }
+            : fail(slug, `source does not support the ${size}px variant.`);
       const variantPath = path.join(variantsDir, `${size}.webp`);
       await fs.writeFile(variantPath, variant.buffer);
       variants[String(size)] = {
@@ -286,7 +306,7 @@ async function main() {
       `export interface FoodImage {\n` +
       `  id: string; slug: string; dishName: string; category: string; canonicalDishId?: string; tags: readonly string[];\n` +
       `  creator: string; sourceUrl: string; license: FoodImageLicense; licenseEvidenceUrl: string; attribution?: string;\n` +
-      `  url: string; variants: Readonly<Partial<Record<FoodImageSize, Readonly<FoodImageVariant>>>>; sha256: string; perceptualHash: string; width: 480; height: 480; format: 'webp'; byteSize: number; originalByteSize: number;\n` +
+      `  url: string; variants: Readonly<Partial<Record<FoodImageSize, Readonly<FoodImageVariant>>>>; sha256: string; perceptualHash: string; width: number; height: number; format: 'webp'; byteSize: number; originalByteSize: number;\n` +
       `  focalPoint: Readonly<{ x: number; y: number }>;\n` +
       `}\n` +
       `export const foodImages: readonly FoodImage[];\n` +

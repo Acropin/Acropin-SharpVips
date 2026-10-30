@@ -52,7 +52,6 @@ interface ProcessResponse {
   asset: ImageAsset;
   warning?: string;
   sourceDimensions?: { width: number; height: number };
-  compressionRatio?: string;
   mlInspection?: MlInspectionResult;
 }
 
@@ -138,10 +137,6 @@ export default function App() {
   const [requiredAttribution, setRequiredAttribution] = useState('');
   const [rightsAttested, setRightsAttested] = useState(false);
   const [submitDirect, setSubmitDirect] = useState<boolean>(false);
-
-  // Focal point
-  const [focalX, setFocalX] = useState<number>(0.5);
-  const [focalY, setFocalY] = useState<number>(0.5);
 
   // Processing state
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -421,8 +416,6 @@ export default function App() {
         formData.append('image', file);
         formData.append('dishName', dishTitle);
         formData.append('universalName', universalSlug);
-        formData.append('focalPointX', String(focalX));
-        formData.append('focalPointY', String(focalY));
         formData.append('contributorGitHub', contributorGitHub);
         formData.append('submitDirect', String(submitDirect));
         formData.append('licenseType', licenseType);
@@ -441,8 +434,6 @@ export default function App() {
             imageUrl,
             dishName: dishTitle,
             universalName: universalSlug,
-            focalPointX: focalX,
-            focalPointY: focalY,
             contributorGitHub,
             submitDirect,
             licenseType,
@@ -806,7 +797,7 @@ export default function App() {
                     Food Image Processing & Clean Metadata Stamper
                   </h2>
                   <p className="text-xs text-slate-400 mt-1">
-                    Creates a 128px thumbnail and 480px menu image. Larger 960px and 1600px versions are included when the source resolution supports them. Image content and redistribution rights require human review.
+                    Stores one untouched source image. WebP, AVIF, JPEG, or PNG sizes are generated from it only when requested, with no crop or upscaling. Common maximum-edge sizes are 128, 480, 960, and 1600 px. Image content and redistribution rights require human review.
                   </p>
                 </div>
                 <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
@@ -852,7 +843,7 @@ export default function App() {
                         <img
                           src={filePreview}
                           alt="Preview"
-                          className="w-32 h-32 object-cover rounded-xl shadow-lg border border-slate-700"
+                          className="w-32 h-32 object-contain rounded-xl shadow-lg border border-slate-700"
                         />
                         <div className="text-xs text-slate-300">
                           <span className="font-semibold text-emerald-400">{file?.name}</span> (
@@ -1069,7 +1060,7 @@ export default function App() {
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                   <div className="flex items-center gap-2 text-emerald-400 font-semibold text-sm">
                     <CheckCircle2 className="w-5 h-5" />
-                    <span>Image processed into {lastResult.asset.acropinMetadata?.variantsAvailable.length ?? 2} WebP sizes.</span>
+                    <span>One source image stored · {lastResult.asset.acropinMetadata?.variantsAvailable.length ?? 2} sizes rendered on demand.</span>
                   </div>
                   <span className="text-xs font-mono text-slate-400">
                     Status:{' '}
@@ -1082,23 +1073,23 @@ export default function App() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="flex flex-col items-center justify-center bg-slate-950 p-4 rounded-xl border border-slate-800">
                     <img
-                      src={lastResult.asset.thumbnailUrl || lastResult.asset.publicUrl}
+                      src={lastResult.asset.publicUrl}
                       alt={lastResult.asset.dishName}
                       className="w-32 h-32 object-contain rounded-lg shadow"
                     />
                     <div className="mt-2 text-xs font-mono text-slate-400 text-center">
-                      Primary 480×480 WebP • {(lastResult.asset.byteSize / 1024).toFixed(1)} KB
+                      Primary {lastResult.asset.width}×{lastResult.asset.height} WebP preview • {(lastResult.asset.byteSize / 1024).toFixed(1)} KB
                     </div>
                   </div>
 
                   <div className="md:col-span-2 space-y-2 text-xs">
                     <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-1">
-                      <div className="font-semibold text-slate-200">Generated Hierarchy Variants:</div>
+                      <div className="font-semibold text-slate-200">Available sizes · rendered from the stored source when requested:</div>
                       <div className="text-slate-400 text-[11px] grid grid-cols-2 gap-2 pt-1 font-mono">
-                        <div>• 128×128 (Thumbnail): {lastResult.asset.thumbnailByteSize ? (lastResult.asset.thumbnailByteSize / 1024).toFixed(1) : '—'} KB</div>
-                        <div>• 480×480 (Card): {(lastResult.asset.byteSize / 1024).toFixed(1)} KB</div>
-                        <div>• 960×960 (Retina 2x): {lastResult.asset.retinaByteSize ? (lastResult.asset.retinaByteSize / 1024).toFixed(1) : '—'} KB</div>
-                        <div>• 1600×1600 (Hi-Res): {lastResult.asset.hiResByteSize ? (lastResult.asset.hiResByteSize / 1024).toFixed(1) : '—'} KB</div>
+                        <div>• Thumbnail {lastResult.asset.thumbnailWidth ?? 128}×{lastResult.asset.thumbnailHeight ?? 128}</div>
+                        <div>• Menu {lastResult.asset.width}×{lastResult.asset.height}</div>
+                        {lastResult.asset.retinaUrl && <div>• Retina {lastResult.asset.retinaWidth ?? 960}×{lastResult.asset.retinaHeight ?? 960}</div>}
+                        {lastResult.asset.hiResUrl && <div>• High-res {lastResult.asset.hiResWidth ?? 1600}×{lastResult.asset.hiResHeight ?? 1600}</div>}
                       </div>
                     </div>
 
@@ -1178,7 +1169,7 @@ export default function App() {
                       <img
                         src={asset.thumbnailUrl || asset.publicUrl}
                         alt={asset.dishName}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        className="w-full h-full object-contain transition-transform duration-300"
                       />
                       <button
                         onClick={() => setViewingVariantsAsset(asset)}

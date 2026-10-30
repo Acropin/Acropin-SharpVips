@@ -105,9 +105,16 @@ export class LocalStorageProvider implements IImageStorageProvider {
         return null;
       }
       const data = await fs.promises.readFile(filePath);
+      const extension = path.extname(filePath).toLowerCase();
       return {
         data,
-        contentType: key.endsWith('.webp') ? 'image/webp' : 'application/octet-stream',
+        contentType: extension === '.webp' ? 'image/webp'
+          : extension === '.jpg' || extension === '.jpeg' ? 'image/jpeg'
+            : extension === '.png' ? 'image/png'
+              : extension === '.avif' ? 'image/avif'
+                : extension === '.tif' || extension === '.tiff' ? 'image/tiff'
+                  : extension === '.heif' || extension === '.heic' ? 'image/heif'
+                    : 'application/octet-stream',
       };
     } catch (err) {
       throw new StorageError(

@@ -22,45 +22,69 @@ export interface FocalPoint {
 }
 
 export interface ImageProcessingOptions {
-  width?: number; // default 480
-  height?: number; // default 480
+  width?: number; // maximum edge for the primary variant; default 480
+  height?: number; // maximum edge for the primary variant; default 480
   format?: 'webp'; // default webp
-  initialQuality?: number; // default 78
-  effort?: number; // default 5
-  targetSizeMinBytes?: number; // default 15 * 1024 (15KB)
-  targetSizeMaxBytes?: number; // default 40 * 1024 (40KB)
+  initialQuality?: number; // default 95; output is never degraded to meet a byte target
+  effort?: number; // default 6
+  /** Skip prebuilding variants when the caller stores the source and serves sizes on demand. */
+  generateHierarchy?: boolean;
+  /** @deprecated Retained for old clients; full-frame output does not crop by focal point. */
   focalPoint?: FocalPoint;
 }
 
 export interface ProcessedImageResult {
-  buffer: Buffer; // Primary 480x480
+  buffer: Buffer; // Primary variant, at most 480px on its longest edge
   hash: string; // SHA-256
   perceptualHash: string; // 64-bit DCT hash for near-duplicate detection
-  width: number; // 480
-  height: number; // 480
+  width: number; // Actual dimensions after aspect-preserving resize
+  height: number;
   format: 'webp';
+  sourceFormat: string;
   byteSize: number;
+  /** @deprecated Kept for metadata compatibility; no crop is applied. */
   focalPoint: FocalPoint;
   qualityUsed: number;
   sizeDeviationWarning?: string;
   sourceDimensions: { width: number; height: number };
-  // Compact 128x128 resolution thumbnail
+  // Compact thumbnail with a maximum edge of 128px
   thumbnailBuffer: Buffer;
-  thumbnailWidth: number; // 128
-  thumbnailHeight: number; // 128
+  thumbnailWidth: number; // Actual dimensions, with longest edge at most 128px
+  thumbnailHeight: number;
   thumbnailByteSize: number;
   thumbnailHash: string;
-  // 960x960 Retina / Medium display
+  // High-density variant (maximum edge 960px)
   retinaBuffer?: Buffer;
-  retinaWidth?: number; // 960
-  retinaHeight?: number; // 960
+  retinaWidth?: number; // Actual dimensions, with longest edge at most 960px
+  retinaHeight?: number;
   retinaByteSize?: number;
-  // 1600x1600 Full High-Res display
+  // High-resolution variant (maximum edge 1600px)
   hiResBuffer?: Buffer;
-  hiResWidth?: number; // 1600
-  hiResHeight?: number; // 1600
+  hiResWidth?: number; // Actual dimensions, with longest edge at most 1600px
+  hiResHeight?: number;
   hiResByteSize?: number;
 }
+
+export type ProcessedImageOnDemandResult = Omit<
+  ProcessedImageResult,
+  'thumbnailBuffer' | 'thumbnailWidth' | 'thumbnailHeight' | 'thumbnailByteSize' | 'thumbnailHash' |
+  'retinaBuffer' | 'retinaWidth' | 'retinaHeight' | 'retinaByteSize' |
+  'hiResBuffer' | 'hiResWidth' | 'hiResHeight' | 'hiResByteSize'
+> & {
+  thumbnailBuffer?: Buffer;
+  thumbnailWidth?: number;
+  thumbnailHeight?: number;
+  thumbnailByteSize?: number;
+  thumbnailHash?: string;
+  retinaBuffer?: Buffer;
+  retinaWidth?: number;
+  retinaHeight?: number;
+  retinaByteSize?: number;
+  hiResBuffer?: Buffer;
+  hiResWidth?: number;
+  hiResHeight?: number;
+  hiResByteSize?: number;
+};
 
 export interface MlInspectionResult {
   verificationLevel: 'vision-model' | 'structural-check';
@@ -92,21 +116,31 @@ export interface AcropinMetadataTags {
 export interface ImageAsset {
   id: string; // unique asset ID
   canonicalDishId?: string;
-  storageKey: string; // food-assets/{assetId}/480.webp
-  publicUrl: string; // stable public delivery URL (480x480)
+  storageKey: string; // Legacy assets point to a stored variant; v3 assets point to their single private source.
+  publicUrl: string; // Stable on-demand delivery URL (480px maximum edge for new assets).
+  /** Source is stored once; transformed variants are delivered on request. */
+  sourceFormat?: string;
+  sourceWidth?: number;
+  sourceHeight?: number;
   thumbnailStorageKey?: string; // food-assets/{assetId}/128.webp
-  thumbnailUrl?: string; // stable public thumbnail URL (128x128)
+  thumbnailUrl?: string; // stable public thumbnail URL (maximum edge 128px)
   thumbnailByteSize?: number;
+  thumbnailWidth?: number;
+  thumbnailHeight?: number;
   retinaStorageKey?: string; // food-assets/{assetId}/960.webp
-  retinaUrl?: string; // stable public retina URL (960x960)
+  retinaUrl?: string; // stable public retina URL (maximum edge 960px)
   retinaByteSize?: number;
+  retinaWidth?: number;
+  retinaHeight?: number;
   hiResStorageKey?: string; // food-assets/{assetId}/1600.webp
-  hiResUrl?: string; // stable public full-res URL (1600x1600)
+  hiResUrl?: string; // stable public full-res URL (maximum edge 1600px)
   hiResByteSize?: number;
+  hiResWidth?: number;
+  hiResHeight?: number;
   sha256Hash: string;
   perceptualHash?: string; // Optional for older catalog records awaiting index migration
-  width: number; // 480
-  height: number; // 480
+  width: number; // Actual primary variant width
+  height: number; // Actual primary variant height
   format: 'webp';
   byteSize: number;
   sourceUrl?: string;
@@ -116,7 +150,7 @@ export interface ImageAsset {
   requiredAttribution?: string;
   rightsAttested?: boolean;
   rightsAttestedAt?: string;
-  processingVersion: string; // 'v1'
+  processingVersion: string; // 'v1' for legacy assets, 'v3-on-demand' for single-source delivery
   processingQuality: number;
   focalPoint: FocalPoint;
   approvalStatus: AssetApprovalStatus;
