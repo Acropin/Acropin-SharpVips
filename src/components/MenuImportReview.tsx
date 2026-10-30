@@ -235,7 +235,7 @@ export const MenuImportReview: React.FC<MenuImportReviewProps> = ({
                   <th className="py-3 px-3">Price</th>
                   <th className="py-3 px-3">Status</th>
                   <th className="py-3 px-3">Canonical Match</th>
-                  <th className="py-3 px-3">Proposed 480x480 Image</th>
+                  <th className="py-3 px-3">Proposed Menu Image</th>
                   <th className="py-3 px-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -317,7 +317,7 @@ export const MenuImportReview: React.FC<MenuImportReviewProps> = ({
                             <img
                               src={item.proposedAsset?.publicUrl}
                               alt="Thumbnail"
-                              className="w-10 h-10 rounded-lg object-cover bg-black border border-slate-700"
+                              className="w-10 h-10 rounded-lg object-contain bg-black border border-slate-700"
                             />
                             <div className="text-[10px] text-slate-400">
                               <span className="font-semibold text-white block">
@@ -438,7 +438,7 @@ export const MenuImportReview: React.FC<MenuImportReviewProps> = ({
                   <img
                     src={asset.publicUrl}
                     alt={asset.dishName}
-                    className="w-full aspect-square object-cover rounded-lg bg-black mb-1.5"
+                    className="w-full aspect-square object-contain rounded-lg bg-black mb-1.5"
                   />
                   <h4 className="text-xs font-semibold text-white truncate">{asset.dishName}</h4>
                   <span className="text-[10px] text-slate-400 block truncate">

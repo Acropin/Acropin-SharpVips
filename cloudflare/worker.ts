@@ -3,6 +3,7 @@
 interface Env {
   DB: D1Database;
   FOOD_ASSETS: R2Bucket;
+  IMAGES: ImagesBinding;
   API_RATE_LIMITER: DurableObjectNamespace;
   OWNER_API_KEY: string;
   IMAGE_URL_SECRET: string;
@@ -49,8 +50,9 @@ interface AuthenticatedClient {
 const DEFAULT_REQUESTS_PER_MINUTE = 120;
 const DEFAULT_REQUESTS_PER_DAY = 5_000;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_IMAGE_SOURCE_BYTES = 20 * 1024 * 1024;
 const IMAGE_URL_TTL_SECONDS = 15 * 60;
-const VARIANT_SIZES = new Set(['480', '960', '1600']);
+const VARIANT_SIZES = new Set(['128', '480', '960', '1600']);
 const PROHIBITED_SOURCE_HOSTS = [
   'unsplash.com', 'pexels.com', 'shutterstock.com', 'gettyimages.com',
   'istockphoto.com', 'adobe.com', 'freepik.com',
@@ -213,7 +215,7 @@ async function signImageUrls(
   const signature = await crypto.subtle.sign('HMAC', signingKey, new TextEncoder().encode(payload));
   const signatureText = toBase64Url(new Uint8Array(signature));
   return Object.fromEntries(sizes.map((size) => {
-    const signedPath = `/api/v1/images/${encodeURIComponent(slug)}/${size}.webp?client=${encodeURIComponent(clientId)}&exp=${expires}&sig=${signatureText}`;
+    const signedPath = `/api/v1/images/${encodeURIComponent(slug)}/${size}.webp?client=${encodeURIComponent(clientId)}&exp=${expires}&sig=${signatureText}&format=auto`;
     return [size, new URL(signedPath, origin).toString()];
   }));
 }
@@ -253,6 +255,14 @@ function parseVariants(row: FoodImageRow): Record<string, ImageVariant> {
 
 function slugIsValid(slug: string): boolean {
   return /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(slug) && slug.length <= 64;
+}
+
+function dimensionsAtMaxEdge(width: number, height: number, maxEdge: number): { width: number; height: number } {
+  const scale = Math.min(1, maxEdge / Math.max(width, height));
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
 }
 
 async function handleCatalogRequest(request: Request, env: Env, client: AuthenticatedClient): Promise<Response> {
@@ -305,20 +315,33 @@ async function handleCatalogRequest(request: Request, env: Env, client: Authenti
       tags = [];
     }
     const variants = parseVariants(row);
-    const imageSizes = Object.keys(variants).filter((size) => VARIANT_SIZES.has(size) && variants[size]?.objectKey);
+    const master = variants.source;
+    const imageSizes = master?.objectKey
+      ? [...VARIANT_SIZES].filter((size) => Number(size) <= Math.max(master.width, master.height))
+      : Object.keys(variants).filter((size) => VARIANT_SIZES.has(size) && variants[size]?.objectKey);
     const signedUrls = imageSizes.length
       ? await signImageUrls(signingKey!, client.id, row.slug, imageSizes, url.origin)
       : {};
-    const publicVariants: Record<string, Omit<ImageVariant, 'objectKey'> & { url: string }> = {};
-    for (const [size, variant] of Object.entries(variants)) {
-      if (!VARIANT_SIZES.has(size) || !variant?.objectKey) continue;
+    const publicVariants: Record<string, {
+      width: number;
+      height: number;
+      byteSize?: number;
+      format: 'webp' | 'auto';
+      url: string;
+    }> = {};
+    for (const size of imageSizes) {
+      const storedVariant = variants[size];
+      const variant = master?.objectKey
+        ? { ...dimensionsAtMaxEdge(master.width, master.height, Number(size)), byteSize: undefined }
+        : storedVariant;
+      if (!variant) continue;
       const signedUrl = signedUrls[size];
       if (!signedUrl) continue;
       publicVariants[size] = {
         width: variant.width,
         height: variant.height,
         byteSize: variant.byteSize,
-        format: 'webp',
+        format: master?.objectKey ? 'auto' : 'webp',
         url: signedUrl,
       };
     }
@@ -344,7 +367,7 @@ async function handleCatalogRequest(request: Request, env: Env, client: Authenti
 async function handleSignedImage(request: Request, env: Env, url: URL, context: ExecutionContext): Promise<Response> {
   if (request.method !== 'GET') return json({ error: 'Method not allowed.' }, 405, { Allow: 'GET, OPTIONS' });
   const pathname = decodeURIComponent(url.pathname);
-  const match = /^\/api\/v1\/images\/([a-z0-9]+(?:-[a-z0-9]+)*)\/(480|960|1600)\.webp$/u.exec(pathname);
+  const match = /^\/api\/v1\/images\/([a-z0-9]+(?:-[a-z0-9]+)*)\/(128|480|960|1600)\.webp$/u.exec(pathname);
   if (!match) return json({ error: 'Image not found.' }, 404);
 
   const [, slug, size] = match;
@@ -387,7 +410,52 @@ async function handleSignedImage(request: Request, env: Env, url: URL, context: 
     return json({ error: 'Image variant metadata is invalid.' }, 500);
   }
   const variant = variants[size];
-  if (!variant?.objectKey || !VARIANT_SIZES.has(size)) return json({ error: 'Requested image size is not available.' }, 404);
+  if (!VARIANT_SIZES.has(size)) return json({ error: 'Requested image size is not available.' }, 404);
+
+  const master = variants.source;
+  if (master?.objectKey) {
+    if (Number(size) > Math.max(master.width, master.height)) {
+      return json({ error: 'This source image does not have enough pixels for the requested size.' }, 404);
+    }
+
+    const requestedFormat = (url.searchParams.get('format') ?? 'auto').toLowerCase();
+    const allowedFormats = new Set(['auto', 'webp', 'avif', 'jpeg', 'png']);
+    if (!allowedFormats.has(requestedFormat)) {
+      return json({ error: 'format must be auto, webp, avif, jpeg, or png.' }, 400);
+    }
+    const accept = request.headers.get('Accept') ?? '';
+    const format = requestedFormat === 'auto'
+      ? accept.includes('image/avif') ? 'avif'
+        : accept.includes('image/webp') ? 'webp'
+          : 'jpeg'
+      : requestedFormat;
+    const formatMime = format === 'jpeg' ? 'image/jpeg' : `image/${format}`;
+    const cacheKey = new Request(
+      `${url.origin}/__acropin_transform_cache/${encodeURIComponent(master.objectKey)}?edge=${size}&format=${format}`
+    );
+    const cache = (caches as CacheStorage & { default: Cache }).default;
+    const cached = await cache.match(cacheKey);
+    if (cached) return cached;
+
+    const object = await env.FOOD_ASSETS.get(master.objectKey);
+    if (!object?.body) return json({ error: 'Image source is missing from storage.' }, 404);
+    const cacheSeconds = Math.max(0, Math.min(300, expiry - Math.floor(Date.now() / 1000)));
+    const transformed = await env.IMAGES.input(object.body)
+      .transform({ width: Number(size), height: Number(size), fit: 'scale-down' })
+      .output({ format: formatMime as 'image/webp' | 'image/avif' | 'image/jpeg' | 'image/png', quality: 95 })
+      .then((result) => result.response({
+        headers: {
+          ...corsHeaders(),
+          'Cache-Control': `public, max-age=${cacheSeconds}, s-maxage=${cacheSeconds}`,
+          'X-Content-Type-Options': 'nosniff',
+          'Cross-Origin-Resource-Policy': 'cross-origin',
+        },
+      }));
+    context.waitUntil(cache.put(cacheKey, transformed.clone()));
+    return transformed;
+  }
+
+  if (!variant?.objectKey) return json({ error: 'Requested image size is not available.' }, 404);
 
   const cacheKey = new Request(`${url.origin}/__acropin_image_cache/${encodeURIComponent(variant.objectKey)}`);
   const cache = (caches as CacheStorage & { default: Cache }).default;
@@ -536,7 +604,66 @@ async function handleAdmin(request: Request, env: Env, url: URL): Promise<Respon
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(slug) DO UPDATE SET dish_name = excluded.dish_name, canonical_dish_id = excluded.canonical_dish_id, category = excluded.category, creator = excluded.creator, tags_json = excluded.tags_json, license = excluded.license, attribution = excluded.attribution, source_url = excluded.source_url, license_evidence_url = excluded.license_evidence_url, variants_json = excluded.variants_json, approval_status = 'approved', updated_at = excluded.updated_at`)
       .bind(slug, dishName, canonicalDishId, category, creator, JSON.stringify(tags), license, attribution, sourceUrl, licenseEvidenceUrl, JSON.stringify(variants), now, now).run();
-    return json({ success: true, slug, next: `Upload approved WebP variants to /api/v1/admin/catalog/${slug}/variants/{480|960|1600}.webp` });
+    return json({ success: true, slug, next: `Upload the single high-resolution WebP master to /api/v1/admin/catalog/${slug}/source.webp` });
+  }
+
+  const sourceUploadMatch = /^\/api\/v1\/admin\/catalog\/([a-z0-9]+(?:-[a-z0-9]+)*)\/source\.webp$/u.exec(url.pathname);
+  if (request.method === 'PUT' && sourceUploadMatch) {
+    const slug = sourceUploadMatch[1];
+    if (!request.headers.get('Content-Type')?.toLowerCase().startsWith('image/webp')) {
+      return json({ error: 'Upload the normalized high-resolution master as image/webp.' }, 415);
+    }
+    const declaredLength = Number(request.headers.get('Content-Length') ?? 0);
+    if (!Number.isSafeInteger(declaredLength) || declaredLength < 1 || declaredLength > MAX_IMAGE_SOURCE_BYTES) {
+      return json({ error: 'Provide a non-empty source image with Content-Length no greater than 20 MB.' }, 413);
+    }
+    const buffer = await request.arrayBuffer();
+    if (!buffer.byteLength || buffer.byteLength > MAX_IMAGE_SOURCE_BYTES || buffer.byteLength !== declaredLength) {
+      return json({ error: 'Source image is empty, too large, or its Content-Length did not match.' }, 413);
+    }
+    const bytes = new Uint8Array(buffer);
+    const isWebp = bytes.byteLength >= 12
+      && String.fromCharCode(...bytes.subarray(0, 4)) === 'RIFF'
+      && String.fromCharCode(...bytes.subarray(8, 12)) === 'WEBP';
+    if (!isWebp) return json({ error: 'The uploaded source is not a valid WebP container.' }, 415);
+
+    const width = Number(request.headers.get('X-Source-Width'));
+    const height = Number(request.headers.get('X-Source-Height'));
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 ||
+        Math.max(width, height) > 1600 || width * height > 2_560_000) {
+      return json({ error: 'Source dimensions must be positive integers with a maximum edge of 1600 pixels.' }, 400);
+    }
+    const row = await env.DB.prepare('SELECT variants_json FROM food_images WHERE slug = ? LIMIT 1')
+      .bind(slug).first<{ variants_json: string }>();
+    if (!row) return json({ error: 'Create the catalog record before uploading its source image.' }, 404);
+    let previous: Record<string, ImageVariant> = {};
+    try {
+      previous = JSON.parse(row.variants_json) as Record<string, ImageVariant>;
+    } catch {
+      previous = {};
+    }
+
+    const digest = await crypto.subtle.digest('SHA-256', buffer);
+    const contentHash = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+    const objectKey = `food-assets/${slug}/source/${contentHash}.webp`;
+    const source: ImageVariant = { objectKey, width, height, byteSize: buffer.byteLength, format: 'webp' };
+    await env.FOOD_ASSETS.put(objectKey, buffer, {
+      httpMetadata: { contentType: 'image/webp', cacheControl: 'public, max-age=31536000, immutable' },
+      customMetadata: { slug, sourceHash: contentHash },
+    });
+    try {
+      await env.DB.prepare('UPDATE food_images SET variants_json = ?, updated_at = ? WHERE slug = ?')
+        .bind(JSON.stringify({ source }), new Date().toISOString(), slug).run();
+    } catch (error) {
+      if (!Object.values(previous).some((variant) => variant.objectKey === objectKey)) {
+        await env.FOOD_ASSETS.delete(objectKey).catch(() => undefined);
+      }
+      throw error;
+    }
+    const obsoleteKeys = [...new Set(Object.values(previous).map((variant) => variant.objectKey))]
+      .filter((key) => key !== objectKey);
+    await Promise.all(obsoleteKeys.map((key) => env.FOOD_ASSETS.delete(key)));
+    return json({ success: true, slug, width, height, byteSize: buffer.byteLength, storedObjectsPerImage: 1 });
   }
 
   const uploadMatch = /^\/api\/v1\/admin\/catalog\/([a-z0-9]+(?:-[a-z0-9]+)*)\/variants\/(480|960|1600)\.webp$/u.exec(url.pathname);
@@ -559,6 +686,16 @@ async function handleAdmin(request: Request, env: Env, url: URL): Promise<Respon
       && String.fromCharCode(...bytes.subarray(8, 12)) === 'WEBP';
     if (!isWebp) return json({ error: 'The uploaded file is not a valid WebP container.' }, 415);
 
+    // The size in the route is the variant's maximum edge, not a square
+    // dimension. The catalog sync sends the actual aspect-preserving size.
+    const widthHeader = request.headers.get('X-Variant-Width');
+    const heightHeader = request.headers.get('X-Variant-Height');
+    const width = widthHeader === null ? Number(size) : Number(widthHeader);
+    const height = heightHeader === null ? Number(size) : Number(heightHeader);
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || Math.max(width, height) > Number(size)) {
+      return json({ error: `Variant dimensions must be positive integers with a maximum edge no greater than ${size}px.` }, 400);
+    }
+
     const row = await env.DB.prepare('SELECT variants_json FROM food_images WHERE slug = ? LIMIT 1').bind(slug).first<{ variants_json: string }>();
     if (!row) return json({ error: 'Create the catalog record before uploading its variants.' }, 404);
     let variants: Record<string, ImageVariant>;
@@ -575,7 +712,7 @@ async function handleAdmin(request: Request, env: Env, url: URL): Promise<Respon
       httpMetadata: { contentType: 'image/webp', cacheControl: 'public, max-age=31536000, immutable' },
       customMetadata: { slug, size },
     });
-    variants[size] = { objectKey, width: Number(size), height: Number(size), byteSize: buffer.byteLength, format: 'webp' };
+    variants[size] = { objectKey, width, height, byteSize: buffer.byteLength, format: 'webp' };
     await env.DB.prepare('UPDATE food_images SET variants_json = ?, updated_at = ? WHERE slug = ?')
       .bind(JSON.stringify(variants), new Date().toISOString(), slug).run();
     if (previousObjectKey && previousObjectKey !== objectKey) await env.FOOD_ASSETS.delete(previousObjectKey);
