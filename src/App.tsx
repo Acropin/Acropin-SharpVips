@@ -449,10 +449,13 @@ export default function App() {
       }
 
       setLastResult(data);
-      // Refresh inventory and queue
-      fetchDataset();
-      if (isAdmin) fetchReviewQueue();
-      fetchCatalog();
+      // Re-read durable storage after acceptance so warm server instances
+      // cannot leave the inventory showing a stale “Needs Image” row.
+      await Promise.all([
+        fetchDataset(),
+        fetchCatalog(),
+        isAdmin ? fetchReviewQueue() : Promise.resolve(),
+      ]);
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : String(err));
     } finally {
@@ -1069,6 +1072,12 @@ export default function App() {
                     </span>
                   </span>
                 </div>
+
+                {lastResult.asset.approvalStatus === 'pending_review' && (
+                  <p className="rounded-lg border border-sky-900/60 bg-sky-950/30 px-4 py-3 text-sm text-sky-200">
+                    Saved successfully and awaiting review. It will appear in the approved shared library after approval; track its preview and review status in Inventory.
+                  </p>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="flex flex-col items-center justify-center bg-slate-950 p-4 rounded-xl border border-slate-800">

@@ -912,13 +912,19 @@ app.get('/api/images/food-assets/*', async (req, res) => {
 // -------------------------------------------------------------
 
 // List assets with filtering
-app.get('/api/images/catalog', (req, res) => {
-  const status = req.query.status as AssetApprovalStatus | undefined;
-  const search = req.query.search as string | undefined;
-  const dishId = req.query.dishId as string | undefined;
+app.get('/api/images/catalog', async (req, res) => {
+  try {
+    await refreshCatalogFromStorage();
+    const status = req.query.status as AssetApprovalStatus | undefined;
+    const search = req.query.search as string | undefined;
+    const dishId = req.query.dishId as string | undefined;
 
-  const assets = getAllAssets({ status, search, dishId });
-  res.json({ assets, total: assets.length });
+    const assets = getAllAssets({ status, search, dishId });
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
+    res.json({ assets, total: assets.length });
+  } catch (err: unknown) {
+    res.status(503).json({ error: err instanceof Error ? err.message : 'Could not refresh the shared image catalog.' });
+  }
 });
 
 // Delete an asset from collection
@@ -1309,6 +1315,7 @@ app.post('/api/ml/inspect', upload.single('image'), async (req, res) => {
 // Real-time Excel-like Inventory Dashboard: live missing vs completed dishes
 app.get('/api/menu-tasks', async (_req, res) => {
   try {
+    await refreshCatalogFromStorage();
     const status = await withFreshTargetDataset(() => {
       const approved = getAllAssets({ status: 'approved' });
       const pending = getAllAssets({ status: 'pending_review' });
@@ -1323,6 +1330,7 @@ app.get('/api/menu-tasks', async (_req, res) => {
 // Live Target Dataset & Excel Spreadsheet Endpoint
 app.get('/api/dataset/targets', async (_req, res) => {
   try {
+    await refreshCatalogFromStorage();
     const status = await withFreshTargetDataset(() => {
       const approved = getAllAssets({ status: 'approved' });
       const pending = getAllAssets({ status: 'pending_review' });
@@ -1349,6 +1357,7 @@ app.post('/api/dataset/targets/import', async (req, res) => {
         ? parseDatasetTargetImport(rawText)
         : [];
 
+    await refreshCatalogFromStorage();
     const { result, datasetStatus } = await withFreshTargetDataset(async () => {
       const result = bulkImportTargets(listToImport, replaceExisting === true);
       await flushTargets();
@@ -1416,6 +1425,7 @@ app.delete('/api/dataset/targets/:id', async (req, res) => {
 // Export Real-time Inventory as CSV
 app.get('/api/dataset/export-csv', async (_req, res) => {
   try {
+    await refreshCatalogFromStorage();
     const csv = await withFreshTargetDataset(() => {
       const approved = getAllAssets({ status: 'approved' });
       const pending = getAllAssets({ status: 'pending_review' });
@@ -1446,9 +1456,15 @@ app.get('/api/dataset/export-csv', async (_req, res) => {
 });
 
 // Organizer Review Queue List
-app.get('/api/images/review-queue', (_req, res) => {
-  const pending = getAllAssets({ status: 'pending_review' });
-  res.json({ pending, count: pending.length });
+app.get('/api/images/review-queue', async (_req, res) => {
+  try {
+    await refreshCatalogFromStorage();
+    const pending = getAllAssets({ status: 'pending_review' });
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
+    res.json({ pending, count: pending.length });
+  } catch (err: unknown) {
+    res.status(503).json({ error: err instanceof Error ? err.message : 'Could not refresh the review queue.' });
+  }
 });
 
 // Organizer Review Decision (Approve / Reject)
@@ -1456,6 +1472,7 @@ app.post('/api/images/review-queue/:id/decision', async (req, res) => {
   try {
     const { id } = req.params;
     const { decision, rejectionReason } = req.body;
+    await refreshCatalogFromStorage();
     if (decision !== 'approve' && decision !== 'reject') {
       res.status(400).json({ error: 'Decision must be "approve" or "reject".' });
       return;
@@ -1487,32 +1504,37 @@ app.post('/api/images/review-queue/:id/decision', async (req, res) => {
 
 // Update asset approval status (e.g. approved, rejected, revoked)
 app.patch('/api/images/catalog/:id/status', async (req, res) => {
-  const { id } = req.params;
-  const { status, reason } = req.body;
+  try {
+    const { id } = req.params;
+    const { status, reason } = req.body;
+    await refreshCatalogFromStorage();
 
-  if (!['approved', 'pending_review', 'rejected', 'revoked'].includes(status)) {
-    res.status(400).json({ error: 'Invalid approval status provided.' });
-    return;
+    if (!['approved', 'pending_review', 'rejected', 'revoked'].includes(status)) {
+      res.status(400).json({ error: 'Invalid approval status provided.' });
+      return;
+    }
+
+    const updated = updateAssetStatus(id, status as AssetApprovalStatus, reason);
+    if (!updated) {
+      res.status(404).json({ error: 'Asset not found.' });
+      return;
+    }
+
+    let revocationReport;
+    if (status === 'revoked') {
+      revocationReport = handleAssetRevocation(id);
+      await flushRestaurantStore();
+    }
+    await flushCatalog();
+    if (status === 'rejected') await releaseDishContributionLock(updated.universalName);
+
+    res.json({
+      asset: updated,
+      revocationReport,
+    });
+  } catch (err: unknown) {
+    res.status(503).json({ error: err instanceof Error ? err.message : 'Could not update the image status.' });
   }
-
-  const updated = updateAssetStatus(id, status as AssetApprovalStatus, reason);
-  if (!updated) {
-    res.status(404).json({ error: 'Asset not found.' });
-    return;
-  }
-
-  let revocationReport;
-  if (status === 'revoked') {
-    revocationReport = handleAssetRevocation(id);
-    await flushRestaurantStore();
-  }
-  await flushCatalog();
-  if (status === 'rejected') await releaseDishContributionLock(updated.universalName);
-
-  res.json({
-    asset: updated,
-    revocationReport,
-  });
 });
 
 // -------------------------------------------------------------
