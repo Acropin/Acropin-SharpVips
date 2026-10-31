@@ -107,6 +107,14 @@ interface AuthStatusResponse {
   contributor?: GitHubContributor | null;
 }
 
+interface StorageHealthResponse {
+  status?: 'ok' | 'degraded';
+  storage?: {
+    mode?: 'local' | 'blob' | 'fallback' | 'unconfigured';
+    writable?: boolean;
+  };
+}
+
 export default function App() {
   const [accessState, setAccessState] = useState<AccessState>('checking');
   const [adminAccessCode, setAdminAccessCode] = useState('');
@@ -120,6 +128,7 @@ export default function App() {
   const [showSignInModal, setShowSignInModal] = useState(false);
   const [signInModalMessage, setSignInModalMessage] = useState<string | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
+  const [storageUnavailable, setStorageUnavailable] = useState(false);
   const [activeTab, setActiveTab] = useState<'inventory' | 'processor' | 'queue' | 'assets' | 'contributors' | 'leaderboard'>('inventory');
   const [inputMode, setInputMode] = useState<'upload' | 'url'>('upload');
 
@@ -203,6 +212,33 @@ export default function App() {
       });
     return () => { cancelled = true; };
   }, [refreshAuthStatus]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let checking = false;
+    const checkStorage = async () => {
+      if (checking) return;
+      checking = true;
+      try {
+        const response = await apiFetch('/api/health', { cache: 'no-store' });
+        const health = await response.json() as StorageHealthResponse;
+        if (!cancelled) {
+          setStorageUnavailable(health.status === 'degraded' || health.storage?.writable === false);
+        }
+      } catch {
+        // Keep the dashboard usable if a transient health check fails. Data
+        // requests display their own errors and never claim a failed save.
+      } finally {
+        checking = false;
+      }
+    };
+    void checkStorage();
+    const interval = window.setInterval(() => void checkStorage(), 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, []);
 
   useEffect(() => {
     const handleOAuthMessage = (data: unknown) => {
@@ -753,6 +789,17 @@ export default function App() {
 
       {/* Main Content Body */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+        {storageUnavailable && (
+          <div role="alert" className="mb-4 flex items-start gap-3 rounded-xl border border-amber-700/70 bg-amber-950/50 px-4 py-3 text-sm text-amber-100">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+            <div>
+              <p className="font-semibold">Food library storage is temporarily unavailable</p>
+              <p className="mt-1 text-amber-100/80">
+                This page may show an older bundled snapshot. Uploads and changes are paused and will not be saved until shared storage is restored.
+              </p>
+            </div>
+          </div>
+        )}
         {authNotice && (
           <div role="status" className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-emerald-800 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200">
             <span>{authNotice}</span>

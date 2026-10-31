@@ -8,6 +8,11 @@ import path from 'node:path';
 import { del, get, put } from '@vercel/blob';
 import { StorageError } from '../images/errors.js';
 import { getAppDataFile } from './data-directory.js';
+import {
+  isPersistentStorageWritable,
+  markBlobStorageAvailable,
+  markBlobStorageUnavailable,
+} from './persistent-json.js';
 
 export interface StorageUploadResult {
   key: string;
@@ -170,6 +175,7 @@ export class VercelBlobStorageProvider implements IImageStorageProvider {
         contentType,
         cacheControlMaxAge: 31536000,
       });
+      markBlobStorageAvailable();
       return {
         key: blob.pathname,
         url: this.getUrl(blob.pathname),
@@ -177,24 +183,44 @@ export class VercelBlobStorageProvider implements IImageStorageProvider {
         contentType,
       };
     } catch (err) {
+      markBlobStorageUnavailable(err);
       throw new StorageError(`Failed to upload image to Vercel Blob: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
   public async get(key: string): Promise<{ data: Buffer; contentType: string } | null> {
-    const blob = await get(key, { access: 'private', useCache: false });
-    if (!blob || blob.statusCode !== 200 || !blob.stream) {
+    if (!isPersistentStorageWritable()) return this.localFallback.get(key);
+
+    let blob: Awaited<ReturnType<typeof get>> | null = null;
+    try {
+      blob = await get(key, { access: 'private', useCache: false });
+    } catch (error) {
+      markBlobStorageUnavailable(error);
+      return this.localFallback.get(key);
+    }
+    if (!blob) {
+      markBlobStorageAvailable();
+      return this.localFallback.get(key);
+    }
+    if (blob.statusCode !== 200 || !blob.stream) {
+      markBlobStorageUnavailable(new Error(`Unexpected Blob response status ${blob.statusCode}.`));
       return this.localFallback.get(key);
     }
 
-    const chunks: Buffer[] = [];
-    for await (const chunk of blob.stream) {
-      chunks.push(Buffer.from(chunk));
+    try {
+      const chunks: Buffer[] = [];
+      for await (const chunk of blob.stream) {
+        chunks.push(Buffer.from(chunk));
+      }
+      markBlobStorageAvailable();
+      return {
+        data: Buffer.concat(chunks),
+        contentType: blob.blob.contentType || 'application/octet-stream',
+      };
+    } catch (error) {
+      markBlobStorageUnavailable(error);
+      return this.localFallback.get(key);
     }
-    return {
-      data: Buffer.concat(chunks),
-      contentType: blob.blob.contentType || 'application/octet-stream',
-    };
   }
 
   public async exists(key: string): Promise<boolean> {
@@ -202,7 +228,13 @@ export class VercelBlobStorageProvider implements IImageStorageProvider {
   }
 
   public async delete(key: string): Promise<void> {
-    await del(key);
+    try {
+      await del(key);
+      markBlobStorageAvailable();
+    } catch (error) {
+      markBlobStorageUnavailable(error);
+      throw new StorageError(`Failed to delete image from Vercel Blob: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   public getUrl(key: string): string {

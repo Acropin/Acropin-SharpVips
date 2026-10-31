@@ -1,7 +1,12 @@
 /** Persistent GitHub contributor profiles and access decisions. */
 import { del, list } from '@vercel/blob';
 import { getAppDataFile } from '../storage/data-directory.js';
-import { isBlobStorageConfigured, readPersistentJson, writePersistentJson } from '../storage/persistent-json.js';
+import {
+  isBlobStorageConfigured,
+  isPersistentStorageWritable,
+  readPersistentJson,
+  writePersistentJson,
+} from '../storage/persistent-json.js';
 
 export type ContributorAccessStatus = 'pending' | 'active' | 'blocked';
 
@@ -43,6 +48,7 @@ function isAccessRecord(value: unknown): value is { status: ContributorAccessSta
 }
 
 function persist(changed: ContributorProfile): void {
+  if (isBlobStorageConfigured() && !isPersistentStorageWritable()) return;
   const changedProfile = { ...changed };
   const snapshot = profiles.map((profile) => ({ ...profile }));
   pendingSave = pendingSave.catch(() => undefined).then(async () => {
@@ -64,26 +70,27 @@ export async function initializeContributors(): Promise<void> {
   if (initialized) return;
   if (!initPromise) {
     initPromise = (async () => {
-      if (!isBlobStorageConfigured()) {
-        const stored = await readPersistentJson<unknown>('app-data/contributors.json', dataFile());
-        if (stored !== null && (!Array.isArray(stored) || !stored.every(isProfile))) {
-          throw new Error('Contributor profile storage is invalid. Fix it before accepting GitHub sign-ins.');
-        }
-        profiles = (stored ?? []) as ContributorProfile[];
+      const legacy = await readPersistentJson<unknown>('app-data/contributors.json', dataFile());
+      if (legacy !== null && (!Array.isArray(legacy) || !legacy.every(isProfile))) {
+        throw new Error('Contributor profile storage is invalid. Fix it before accepting GitHub sign-ins.');
+      }
+
+      if (!isBlobStorageConfigured() || !isPersistentStorageWritable()) {
+        profiles = (legacy ?? []) as ContributorProfile[];
         let migrated = false;
         profiles = profiles.map((profile) => {
           if (profile.accessStatus !== 'pending') return profile;
           migrated = true;
           return { ...profile, accessStatus: 'active', updatedAt: new Date().toISOString() };
         });
-        if (migrated) {
-          await writePersistentJson('app-data/contributors.json', dataFile(), profiles);
+        if (migrated && isPersistentStorageWritable()) {
+          try {
+            await writePersistentJson('app-data/contributors.json', dataFile(), profiles);
+          } catch (error) {
+            console.error('Could not persist the contributor migration; continuing with the read-only snapshot.', error instanceof Error ? error.name : 'UnknownError');
+          }
         }
       } else {
-        const legacy = await readPersistentJson<unknown>('app-data/contributors.json', dataFile());
-        if (legacy !== null && (!Array.isArray(legacy) || !legacy.every(isProfile))) {
-          throw new Error('Legacy contributor storage is invalid. Fix it before accepting GitHub sign-ins.');
-        }
         const storedProfiles = new Map<string, ContributorProfile>();
         let cursor: string | undefined;
         let hasMore = true;
@@ -109,12 +116,16 @@ export async function initializeContributors(): Promise<void> {
         }
         profiles = [...storedProfiles.values()].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
         if (legacy !== null) {
-          await Promise.all([...storedProfiles.values()].map((profile) => writePersistentJson(
-            `app-data/contributors/${profile.id}.json`,
-            getAppDataFile('contributors', `${profile.id}.json`),
-            profile
-          )));
-          await del('app-data/contributors.json');
+          try {
+            await Promise.all([...storedProfiles.values()].map((profile) => writePersistentJson(
+              `app-data/contributors/${profile.id}.json`,
+              getAppDataFile('contributors', `${profile.id}.json`),
+              profile
+            )));
+            await del('app-data/contributors.json');
+          } catch (error) {
+            console.error('Could not complete the contributor storage migration; continuing with the data loaded in memory.', error instanceof Error ? error.name : 'UnknownError');
+          }
         }
       }
       initialized = true;
@@ -134,7 +145,7 @@ function cacheProfile(profile: ContributorProfile): void {
 
 export async function getContributorById(id: string): Promise<ContributorProfile | undefined> {
   if (!/^github_\d+$/u.test(id)) return undefined;
-  if (!isBlobStorageConfigured()) {
+  if (!isBlobStorageConfigured() || !isPersistentStorageWritable()) {
     const profile = profiles.find((candidate) => candidate.id === id);
     if (!profile) return undefined;
     // Profiles created before automatic access was enabled were stored as
@@ -142,7 +153,7 @@ export async function getContributorById(id: string): Promise<ContributorProfile
     if (profile.accessStatus === 'pending') {
       profile.accessStatus = 'active';
       profile.updatedAt = new Date().toISOString();
-      persist(profile);
+      if (isPersistentStorageWritable()) persist(profile);
     }
     return { ...profile };
   }
@@ -164,7 +175,7 @@ export async function getContributorById(id: string): Promise<ContributorProfile
   const accessStatus = isAccessRecord(storedAccess) ? storedAccess.status : stored.accessStatus;
   const profile = { ...stored, accessStatus: accessStatus === 'pending' ? 'active' : accessStatus };
   cacheProfile(profile);
-  if (accessStatus === 'pending') {
+  if (accessStatus === 'pending' && isPersistentStorageWritable()) {
     // Migrate legacy pending profile/access records so subsequent requests
     // continue to see the automatic access decision.
     await writePersistentJson(
@@ -220,7 +231,7 @@ export async function upsertGitHubContributor(input: {
 }
 
 export async function listContributors(): Promise<ContributorProfile[]> {
-  if (isBlobStorageConfigured()) {
+  if (isBlobStorageConfigured() && isPersistentStorageWritable()) {
     let cursor: string | undefined;
     let hasMore = true;
     while (hasMore) {
@@ -261,13 +272,13 @@ export async function updateContributorAccess(id: string, status: ContributorAcc
   profile.accessStatus = status;
   profile.updatedAt = new Date().toISOString();
   cacheProfile(profile);
-  if (isBlobStorageConfigured()) {
+  if (isBlobStorageConfigured() && isPersistentStorageWritable()) {
     pendingSave = pendingSave.catch(() => undefined).then(() => writePersistentJson(
       `app-data/contributor-access/${profile.id}.json`,
       accessFile(profile.id),
       { status, updatedAt: profile.updatedAt }
     ));
-  } else {
+  } else if (!isBlobStorageConfigured()) {
     persist(profile);
   }
   return { ...profile };

@@ -6,7 +6,7 @@
 import { foodImages } from 'acropin-food-images';
 import { getAppDataFile } from '../storage/data-directory.js';
 import { getStorageProvider } from '../storage/image-storage.js';
-import { readPersistentJson, writePersistentJson } from '../storage/persistent-json.js';
+import { isPersistentStorageWritable, readPersistentJson, writePersistentJson } from '../storage/persistent-json.js';
 import {
   computePerceptualHash,
   MAX_PERCEPTUAL_DUPLICATE_DISTANCE,
@@ -229,10 +229,13 @@ export async function initializeCatalog(): Promise<void> {
 
         const attributionChanged = acceptedAssets.some(hasUnverifiedLegacyAttribution);
         const placeholdersRemoved = storedAssets.length !== savedAssets.length;
-        if ((placeholdersRemoved || attributionChanged) &&
-            (process.env.BLOB_READ_WRITE_TOKEN || process.env.VERCEL !== '1')) {
-          saveCatalogToFile();
-          await flushCatalog();
+        if ((placeholdersRemoved || attributionChanged) && isPersistentStorageWritable()) {
+          try {
+            saveCatalogToFile();
+            await flushCatalog();
+          } catch (error) {
+            console.error('Could not persist the catalog cleanup; continuing with the loaded snapshot.', error instanceof Error ? error.name : 'UnknownError');
+          }
         }
       } catch (error) {
         initializePromise = null;

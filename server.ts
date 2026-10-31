@@ -70,7 +70,11 @@ import { inspectFoodImageWithMl } from './src/lib/server/ml-anti-corruption.js';
 import { fetchRemoteImage } from './src/lib/server/remote-image.js';
 import { canReadImageAsset } from './src/lib/server/image-authorization.js';
 import { buildMonthlyContributorLeaderboard } from './src/lib/server/contributor-rewards.js';
-import { isBlobStorageConfigured } from './src/lib/storage/persistent-json.js';
+import {
+  getPersistentStorageHealth,
+  isBlobStorageConfigured,
+  isPersistentStorageWritable,
+} from './src/lib/storage/persistent-json.js';
 import {
   initializeTargetDataset,
   getAllTargetItems,
@@ -166,7 +170,7 @@ function getGitHubOAuthConfig() {
     callbackUrl,
     sessionSecret,
     configured: Boolean(clientId && clientSecret && validCallback && sessionSecret.length >= 32 &&
-      (process.env.VERCEL !== '1' || isBlobStorageConfigured())),
+      (process.env.VERCEL !== '1' || (isBlobStorageConfigured() && isPersistentStorageWritable()))),
   };
 }
 
@@ -534,6 +538,17 @@ function normalizeRightsSubmission(
 app.use(express.json({ limit: vercelRequestLimit }));
 app.use(express.urlencoded({ extended: true, limit: vercelRequestLimit }));
 
+// This endpoint intentionally stays public so the UI can explain a storage
+// outage even when owner authentication or the persistent store is down.
+app.get('/api/health', (_req, res) => {
+  const storage = getPersistentStorageHealth();
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  res.status(storage.available ? 200 : 503).json({
+    status: storage.available ? 'ok' : 'degraded',
+    storage,
+  });
+});
+
 // The Vercel dashboard API is owner-only; restaurant apps use the
 // approved-key Cloudflare image API for catalog access.
 app.use('/api', async (req, res, next) => {
@@ -614,6 +629,22 @@ app.use('/api', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+// Never return a success response for changes that cannot reach durable
+// storage. Image inspection is read-only, and logout only clears a cookie.
+app.use('/api', (req, res, next) => {
+  const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method.toUpperCase());
+  const isReadOnlyAction = req.path === '/ml/inspect' || req.path === '/auth/github/logout';
+  if (!isMutation || isReadOnlyAction || isPersistentStorageWritable()) {
+    next();
+    return;
+  }
+
+  res.setHeader('Retry-After', '30');
+  res.status(503).json({
+    error: 'Food library storage is temporarily unavailable. Your changes were not saved. Try again after storage is restored.',
+  });
 });
 
 app.get('/api/auth/status', async (req, res, next) => {

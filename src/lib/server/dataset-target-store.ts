@@ -4,7 +4,7 @@
  */
 
 import { getAppDataFile } from '../storage/data-directory.js';
-import { isBlobStorageConfigured, readPersistentJson, writePersistentJson } from '../storage/persistent-json.js';
+import { isPersistentStorageWritable, readPersistentJson, writePersistentJson } from '../storage/persistent-json.js';
 import { toUniversalFoodName } from '../images/universal-naming.js';
 import { CANONICAL_DISHES } from '../catalog/canonical-dishes.js';
 import type { DatasetTargetItem, ImageAsset, DishDietary, DatasetTargetDietary, AcropinMetadataTags } from '../images/types.js';
@@ -61,10 +61,13 @@ export async function initializeTargetDataset(): Promise<void> {
       } else if (Array.isArray(stored) && stored.every(isDatasetTargetItem)) {
         // An intentionally empty inventory is valid and must stay empty.
         targetDataset = stored.filter((item) => !LEGACY_SEED_TARGET_IDS.has(item.id));
-        if (targetDataset.length !== stored.length &&
-            (isBlobStorageConfigured() || process.env.VERCEL !== '1')) {
-          saveTargetsToFile();
-          await flushTargets();
+        if (targetDataset.length !== stored.length && isPersistentStorageWritable()) {
+          try {
+            saveTargetsToFile();
+            await flushTargets();
+          } catch (error) {
+            console.error('Could not persist the target inventory cleanup; continuing with the loaded snapshot.', error instanceof Error ? error.name : 'UnknownError');
+          }
         }
       } else {
         throw new Error('Dataset target storage is invalid. Fix the stored data before accepting changes.');
@@ -120,9 +123,13 @@ export async function refreshTargetDataset(): Promise<void> {
 
   const latestTargets = stored.filter((item) => !LEGACY_SEED_TARGET_IDS.has(item.id));
   targetDataset = latestTargets;
-  if (latestTargets.length !== stored.length) {
-    saveTargetsToFile();
-    await flushTargets();
+  if (latestTargets.length !== stored.length && isPersistentStorageWritable()) {
+    try {
+      saveTargetsToFile();
+      await flushTargets();
+    } catch (error) {
+      console.error('Could not persist the target inventory cleanup; serving the loaded snapshot.', error instanceof Error ? error.name : 'UnknownError');
+    }
   }
 }
 

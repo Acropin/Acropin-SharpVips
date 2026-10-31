@@ -5,7 +5,7 @@
 
 import { getAssetById } from './catalog-store.js';
 import { getAppDataFile } from '../storage/data-directory.js';
-import { readPersistentJson, writePersistentJson } from '../storage/persistent-json.js';
+import { isPersistentStorageWritable, readPersistentJson, writePersistentJson } from '../storage/persistent-json.js';
 import type {
   MenuItem,
   RestaurantMenu,
@@ -66,10 +66,13 @@ export async function initializeRestaurants(): Promise<void> {
         const savedRestaurants = stored as RestaurantMenu[];
         restaurants = savedRestaurants.filter((menu) => !isLegacyDemoRestaurant(menu));
 
-        if (restaurants.length !== savedRestaurants.length &&
-            (process.env.BLOB_READ_WRITE_TOKEN || process.env.VERCEL !== '1')) {
-          saveRestaurantsToFile();
-          await flushRestaurantStore();
+        if (restaurants.length !== savedRestaurants.length && isPersistentStorageWritable()) {
+          try {
+            saveRestaurantsToFile();
+            await flushRestaurantStore();
+          } catch (error) {
+            console.error('Could not persist the restaurant cleanup; continuing with the loaded snapshot.', error instanceof Error ? error.name : 'UnknownError');
+          }
         }
       }
 
