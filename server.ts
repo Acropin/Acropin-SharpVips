@@ -7,11 +7,12 @@ import express from 'express';
 import multer from 'multer';
 import path from 'node:path';
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import sharp from 'sharp';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { processFoodImage } from './src/lib/images/process-image.js';
 import { StorageError } from './src/lib/images/errors.js';
-import { buildVersionedStorageKey, getStorageProvider } from './src/lib/storage/image-storage.js';
+import { getStorageProvider } from './src/lib/storage/image-storage.js';
 import {
   initializeCatalog,
   DuplicateAssetError,
@@ -82,9 +83,9 @@ import {
 } from './src/lib/server/dataset-target-store.js';
 import type {
   AssetApprovalStatus,
-  FocalPoint,
   ImageAsset,
   LicenseType,
+  ProcessedImageOnDemandResult,
   ProcessedImageResult,
 } from './src/lib/images/types.js';
 
@@ -117,13 +118,13 @@ interface RightsSubmission {
 }
 
 interface PersistProcessedAssetInput {
-  processed: ProcessedImageResult;
+  processed: ProcessedImageResult | ProcessedImageOnDemandResult;
+  sourceBuffer: Buffer;
   dishName: string;
   universalName: string;
   filename: string;
   canonicalDishId?: string;
   originalByteSize: number;
-  focalPoint: FocalPoint;
   rights: RightsSubmission;
   mlInspection: Awaited<ReturnType<typeof inspectFoodImageWithMl>>;
   approvalStatus: AssetApprovalStatus;
@@ -286,8 +287,46 @@ function isVisionVerified(inspection: PersistProcessedAssetInput['mlInspection']
   return inspection.verificationLevel === 'vision-model' && inspection.antiCorruptionPassed;
 }
 
-function versionedVariantKey(assetId: string, size: 128 | 480 | 960 | 1600): string {
-  return buildVersionedStorageKey(assetId).replace(/480\.webp$/u, `${size}.webp`);
+function sourceFileExtension(format: string): string {
+  switch (format.toLowerCase()) {
+    case 'jpeg':
+    case 'jpg': return 'jpg';
+    case 'png': return 'png';
+    case 'webp': return 'webp';
+    case 'avif': return 'avif';
+    case 'tiff':
+    case 'tif': return 'tiff';
+    case 'heif':
+    case 'heic': return 'heif';
+    default: throw new Error(`Unsupported source image format: ${format}`);
+  }
+}
+
+function sourceContentType(format: string): string {
+  switch (format.toLowerCase()) {
+    case 'jpeg':
+    case 'jpg': return 'image/jpeg';
+    case 'png': return 'image/png';
+    case 'webp': return 'image/webp';
+    case 'avif': return 'image/avif';
+    case 'tiff':
+    case 'tif': return 'image/tiff';
+    case 'heif':
+    case 'heic': return 'image/heif';
+    default: throw new Error(`Unsupported source image format: ${format}`);
+  }
+}
+
+function onDemandImageUrl(assetId: string, maxEdge: number): string {
+  return `/api/images/food-assets/${encodeURIComponent(assetId)}/v3/deliver?width=${maxEdge}&format=webp`;
+}
+
+function dimensionsWithinMaxEdge(sourceWidth: number, sourceHeight: number, maxEdge: number): { width: number; height: number } {
+  const scale = Math.min(1, maxEdge / Math.max(sourceWidth, sourceHeight));
+  return {
+    width: Math.max(1, Math.round(sourceWidth * scale)),
+    height: Math.max(1, Math.round(sourceHeight * scale)),
+  };
 }
 
 function isPlaceholderHostname(hostname: string): boolean {
@@ -325,46 +364,53 @@ function resolveFoodName(dishName: unknown, requestedSlug?: unknown): ReturnType
 async function persistProcessedAsset(input: PersistProcessedAssetInput): Promise<ImageAsset> {
   const assetId = `asset_${input.universalName}_${input.processed.hash.slice(0, 16)}_${randomUUID()}`;
   const storage = getStorageProvider();
+  const sourceMaxEdge = Math.max(input.processed.sourceDimensions.width, input.processed.sourceDimensions.height);
+  const thumbnailDimensions = dimensionsWithinMaxEdge(
+    input.processed.sourceDimensions.width,
+    input.processed.sourceDimensions.height,
+    128
+  );
   const variants = [
-    { size: 480 as const, buffer: input.processed.buffer },
-    { size: 128 as const, buffer: input.processed.thumbnailBuffer },
-    ...(input.processed.retinaBuffer ? [{ size: 960 as const, buffer: input.processed.retinaBuffer }] : []),
-    ...(input.processed.hiResBuffer ? [{ size: 1600 as const, buffer: input.processed.hiResBuffer }] : []),
+    { size: 480 as const, width: input.processed.width, height: input.processed.height },
+    { size: 128 as const, ...thumbnailDimensions },
+    ...(sourceMaxEdge >= 960
+      ? [{ size: 960 as const, ...dimensionsWithinMaxEdge(input.processed.sourceDimensions.width, input.processed.sourceDimensions.height, 960) }]
+      : []),
+    ...(sourceMaxEdge >= 1600
+      ? [{ size: 1600 as const, ...dimensionsWithinMaxEdge(input.processed.sourceDimensions.width, input.processed.sourceDimensions.height, 1600) }]
+      : []),
   ];
   const uploaded: Array<{ key: string }> = [];
-  const results = new Map<number, Awaited<ReturnType<typeof storage.upload>>>();
 
   try {
-    for (const variant of variants) {
-      const result = await storage.upload(
-        versionedVariantKey(assetId, variant.size),
-        variant.buffer,
-        'image/webp'
-      );
-      uploaded.push(result);
-      results.set(variant.size, result);
-    }
-
-    const primary = results.get(480);
-    const thumbnail = results.get(128);
-    if (!primary || !thumbnail) throw new Error('The required 480px and 128px image variants were not stored.');
+    const extension = sourceFileExtension(input.processed.sourceFormat);
+    const source = await storage.upload(
+      `food-assets/${assetId}/v3/source.${extension}`,
+      input.sourceBuffer,
+      sourceContentType(input.processed.sourceFormat)
+    );
+    uploaded.push(source);
 
     const now = new Date().toISOString();
-    const variantSizes = variants.map(({ size }) => `${size}x${size}`);
+    const variantSizes = variants.map(({ width, height }) => `${width}x${height}`);
+    const dynamicUrl = (size: number) => onDemandImageUrl(assetId, size);
     const asset: ImageAsset = {
       id: assetId,
       canonicalDishId: input.canonicalDishId,
-      storageKey: primary.key,
-      publicUrl: primary.url,
-      thumbnailStorageKey: thumbnail.key,
-      thumbnailUrl: thumbnail.url,
-      thumbnailByteSize: input.processed.thumbnailByteSize,
-      retinaStorageKey: results.get(960)?.key,
-      retinaUrl: results.get(960)?.url,
-      retinaByteSize: input.processed.retinaByteSize,
-      hiResStorageKey: results.get(1600)?.key,
-      hiResUrl: results.get(1600)?.url,
-      hiResByteSize: input.processed.hiResByteSize,
+      storageKey: source.key,
+      publicUrl: dynamicUrl(480),
+      thumbnailUrl: dynamicUrl(128),
+      thumbnailWidth: thumbnailDimensions.width,
+      thumbnailHeight: thumbnailDimensions.height,
+      retinaUrl: sourceMaxEdge >= 960 ? dynamicUrl(960) : undefined,
+      retinaWidth: variants.find((variant) => variant.size === 960)?.width,
+      retinaHeight: variants.find((variant) => variant.size === 960)?.height,
+      hiResUrl: sourceMaxEdge >= 1600 ? dynamicUrl(1600) : undefined,
+      hiResWidth: variants.find((variant) => variant.size === 1600)?.width,
+      hiResHeight: variants.find((variant) => variant.size === 1600)?.height,
+      sourceFormat: input.processed.sourceFormat,
+      sourceWidth: input.processed.sourceDimensions.width,
+      sourceHeight: input.processed.sourceDimensions.height,
       sha256Hash: input.processed.hash,
       perceptualHash: input.processed.perceptualHash,
       width: input.processed.width,
@@ -379,9 +425,9 @@ async function persistProcessedAsset(input: PersistProcessedAssetInput): Promise
       requiredAttribution: input.rights.requiredAttribution,
       rightsAttested: true,
       rightsAttestedAt: now,
-      processingVersion: 'v1',
+      processingVersion: 'v3-on-demand',
       processingQuality: input.processed.qualityUsed,
-      focalPoint: input.focalPoint,
+      focalPoint: input.processed.focalPoint,
       approvalStatus: input.approvalStatus,
       createdAt: now,
       updatedAt: now,
@@ -758,8 +804,81 @@ app.get('/api/images/food-assets/*', async (req, res) => {
     await refreshCatalogFromStorage();
     const relPath = (req.params as Record<string, string>)[0];
     const key = `food-assets/${relPath}`;
+
+    const deliveryMatch = /^([^/]+)\/v3\/deliver$/u.exec(relPath);
+    if (deliveryMatch) {
+      const assetId = deliveryMatch[1];
+      const asset = getAllAssets().find((candidate) =>
+        candidate.id === assetId && candidate.processingVersion === 'v3-on-demand'
+      );
+      if (!asset || !canReadImageAsset(asset.approvalStatus, asset.contributorId, getRequestAccess(req))) {
+        res.status(404).json({ error: 'Approved image asset not found.' });
+        return;
+      }
+
+      const widthText = typeof req.query.width === 'string' ? req.query.width : '480';
+      const heightText = typeof req.query.height === 'string' ? req.query.height : widthText;
+      const width = Number(widthText);
+      const height = Number(heightText);
+      if (!/^\d{1,4}$/u.test(widthText) || !/^\d{1,4}$/u.test(heightText) ||
+          !Number.isInteger(width) || !Number.isInteger(height) ||
+          width < 32 || height < 32 || width > 1600 || height > 1600) {
+        res.status(400).json({ error: 'Image width and height must be whole numbers from 32 to 1600 pixels.' });
+        return;
+      }
+
+      const requestedFormat = typeof req.query.format === 'string' ? req.query.format.toLowerCase() : 'webp';
+      const acceptedFormats = new Set(['auto', 'webp', 'avif', 'jpeg', 'png']);
+      if (!acceptedFormats.has(requestedFormat)) {
+        res.status(400).json({ error: 'Image format must be auto, webp, avif, jpeg, or png.' });
+        return;
+      }
+      const accept = req.get('accept') ?? '';
+      const outputFormat = requestedFormat === 'auto'
+        ? accept.includes('image/avif') ? 'avif'
+          : accept.includes('image/webp') ? 'webp'
+            : 'jpeg'
+        : requestedFormat;
+
+      const storage = getStorageProvider();
+      const source = await storage.get(asset.storageKey);
+      if (!source) {
+        res.status(404).json({ error: 'Stored source image is missing.' });
+        return;
+      }
+
+      const pipeline = sharp(source.data, { failOn: 'error', limitInputPixels: 30_000_000 })
+        .rotate()
+        .resize(width, height, {
+          fit: 'inside',
+          withoutEnlargement: true,
+          kernel: sharp.kernel.lanczos3,
+        })
+        .toColorspace('srgb');
+      const encoded = outputFormat === 'avif'
+        ? await pipeline.avif({ quality: 95, effort: 6 }).toBuffer({ resolveWithObject: true })
+        : outputFormat === 'jpeg'
+          ? await pipeline.flatten({ background: '#ffffff' }).jpeg({ quality: 95, mozjpeg: true }).toBuffer({ resolveWithObject: true })
+          : outputFormat === 'png'
+            ? await pipeline.png({ compressionLevel: 9, adaptiveFiltering: true }).toBuffer({ resolveWithObject: true })
+            : await pipeline.webp({ quality: 95, effort: 6, smartSubsample: true }).toBuffer({ resolveWithObject: true });
+
+      res.setHeader('Content-Type', `image/${outputFormat === 'jpeg' ? 'jpeg' : outputFormat}`);
+      res.setHeader('Content-Length', String(encoded.data.length));
+      res.setHeader('X-Image-Width', String(encoded.info.width));
+      res.setHeader('X-Image-Height', String(encoded.info.height));
+      res.setHeader('X-Image-Source-Format', asset.sourceFormat ?? 'unknown');
+      res.setHeader('Cache-Control', asset.approvalStatus === 'approved'
+        ? 'public, max-age=300, s-maxage=300, stale-while-revalidate=60'
+        : 'private, no-store');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      if (requestedFormat === 'auto') res.setHeader('Vary', 'Accept');
+      res.send(encoded.data);
+      return;
+    }
+
     const asset = getAllAssets().find((candidate) => [
-      candidate.storageKey,
+      ...(candidate.processingVersion === 'v3-on-demand' ? [] : [candidate.storageKey]),
       candidate.thumbnailStorageKey,
       candidate.retinaStorageKey,
       candidate.hiResStorageKey,
@@ -839,8 +958,6 @@ app.post('/api/images/upload', upload.single('image'), async (req, res) => {
       dishName,
       universalName: clientUniversalName,
       canonicalDishId,
-      focalPointX,
-      focalPointY,
     } = req.body;
     if (typeof dishName !== 'string' || !dishName.trim()) {
       res.status(400).json({ error: 'Provide the food dish name before processing this image.' });
@@ -871,16 +988,13 @@ app.post('/api/images/upload', upload.single('image'), async (req, res) => {
       dailySlot = await acquireContributorDailySlot(access.profile.id, randomUUID(), contributorDailyLimit());
     }
 
-    const fx = focalPointX ? parseFloat(focalPointX) : 0.5;
-    const fy = focalPointY ? parseFloat(focalPointY) : 0.5;
-
-    // Execute Sharp Processing Engine (generates 480x480 and 128x128 WebP)
+    // Create full-frame variants with a 480px maximum edge and high WebP quality.
     const processed = await processFoodImage(req.file.buffer, {
       width: 480,
       height: 480,
-      initialQuality: 78,
-      effort: 5,
-      focalPoint: { x: fx, y: fy },
+      initialQuality: 95,
+      effort: 6,
+      generateHierarchy: false,
     });
 
     // Derive a stable universal dish slug; each image receives its own immutable asset ID.
@@ -934,12 +1048,12 @@ app.post('/api/images/upload', upload.single('image'), async (req, res) => {
       : undefined;
     const asset = await persistProcessedAsset({
       processed,
+      sourceBuffer: req.file.buffer,
       dishName: universal.displayName,
       universalName: universal.universalName,
       filename: universal.filename,
       canonicalDishId: validCanonicalDishId,
       originalByteSize: req.file.buffer.length,
-      focalPoint: { x: fx, y: fy },
       rights,
       mlInspection,
       approvalStatus,
@@ -963,7 +1077,6 @@ app.post('/api/images/upload', upload.single('image'), async (req, res) => {
       canonicalMatch: match,
       warning: processed.sizeDeviationWarning,
       sourceDimensions: processed.sourceDimensions,
-      compressionRatio: ((1 - processed.byteSize / req.file.buffer.length) * 100).toFixed(1) + '%',
       mlInspection,
     });
   } catch (err: unknown) {
@@ -999,8 +1112,6 @@ app.post('/api/images/process-url', async (req, res) => {
       dishName,
       universalName: clientUniversalName,
       canonicalDishId,
-      focalPointX,
-      focalPointY,
     } = req.body;
 
     if (typeof imageUrl !== 'string' || !imageUrl.trim()) {
@@ -1052,16 +1163,13 @@ app.post('/api/images/process-url', async (req, res) => {
       return;
     }
 
-    const fx = focalPointX ? parseFloat(focalPointX) : 0.5;
-    const fy = focalPointY ? parseFloat(focalPointY) : 0.5;
-
-    // Process through Sharp (generates both 480x480 and 128x128 WebP)
+    // Create full-frame variants with a 480px maximum edge and high WebP quality.
     const processed = await processFoodImage(buffer, {
       width: 480,
       height: 480,
-      initialQuality: 78,
-      effort: 5,
-      focalPoint: { x: fx, y: fy },
+      initialQuality: 95,
+      effort: 6,
+      generateHierarchy: false,
     });
 
 
@@ -1115,12 +1223,12 @@ app.post('/api/images/process-url', async (req, res) => {
       : undefined;
     const asset = await persistProcessedAsset({
       processed,
+      sourceBuffer: buffer,
       dishName: universal.displayName,
       universalName: universal.universalName,
       filename: universal.filename,
       canonicalDishId: validCanonicalDishId,
       originalByteSize: buffer.length,
-      focalPoint: { x: fx, y: fy },
       rights,
       mlInspection,
       approvalStatus,
@@ -1144,7 +1252,6 @@ app.post('/api/images/process-url', async (req, res) => {
       canonicalMatch: match,
       warning: processed.sizeDeviationWarning,
       sourceDimensions: processed.sourceDimensions,
-      compressionRatio: ((1 - processed.byteSize / buffer.length) * 100).toFixed(1) + '%',
       mlInspection,
     });
   } catch (err: unknown) {

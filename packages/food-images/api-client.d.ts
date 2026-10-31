@@ -1,11 +1,12 @@
-export type FoodImageApiSize = 480 | 960 | 1600;
+export type FoodImageApiSize = 128 | 480 | 960 | 1600;
 
 export interface FoodImageApiVariant {
   url: string;
   width: number;
   height: number;
-  format: 'webp';
-  byteSize: number;
+  format: 'webp' | 'auto';
+  /** Exact bytes are known for legacy stored variants, but generated master transforms are size-dependent. */
+  byteSize?: number;
 }
 
 export interface ApiFoodImage {

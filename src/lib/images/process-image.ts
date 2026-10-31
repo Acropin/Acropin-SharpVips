@@ -7,17 +7,27 @@ import crypto from 'node:crypto';
 import sharp, { type Metadata } from 'sharp';
 import { ImageValidationError, ImageTooSmallError, ImageProcessingError } from './errors.js';
 import { computePerceptualHash } from './perceptual-hash.js';
-import type { FocalPoint, ImageProcessingOptions, ProcessedImageResult } from './types.js';
+import type {
+  FocalPoint,
+  ImageProcessingOptions,
+  ProcessedImageOnDemandResult,
+  ProcessedImageResult,
+} from './types.js';
 
-// Limits & Safety Bounds
-export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024; // 15 MB
-export const MAX_DIMENSION = 8000; // 8000 px
-export const MAX_PIXELS = 30_000_000; // 30 Megapixels
-export const MIN_SOURCE_DIMENSION = 300; // Below this cannot produce good 480x480 square crop without degradation
+// Safety limits. Variants use these values as their maximum edge, not a forced
+// square canvas. The original photo is never cropped or enlarged.
+export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+export const MAX_DIMENSION = 8000;
+export const MAX_PIXELS = 30_000_000;
+export const MIN_SOURCE_DIMENSION = 300;
+export const MIN_PRIMARY_EDGE = 480;
 export const SUPPORTED_FORMATS = new Set(['jpeg', 'jpg', 'png', 'webp', 'avif', 'tiff', 'heif']);
+export const DEFAULT_WEBP_QUALITY = 95;
+export const THUMBNAIL_WEBP_QUALITY = 88;
 
 /**
  * Validate image buffer headers, size, dimensions, and pixel counts.
+ * We require enough source pixels for a 480px primary without upscaling.
  */
 export async function validateImageBuffer(buffer: Buffer): Promise<{
   width: number;
@@ -39,8 +49,7 @@ export async function validateImageBuffer(buffer: Buffer): Promise<{
 
   let metadata: Metadata;
   try {
-    const pipeline = sharp(buffer, { failOn: 'error' });
-    metadata = await pipeline.metadata();
+    metadata = await sharp(buffer, { failOn: 'error' }).metadata();
   } catch (err) {
     throw new ImageValidationError(
       `Malformed or corrupted image file: ${err instanceof Error ? err.message : String(err)}`,
@@ -58,11 +67,9 @@ export async function validateImageBuffer(buffer: Buffer): Promise<{
 
   const width = metadata.width || 0;
   const height = metadata.height || 0;
-
   if (width <= 0 || height <= 0) {
     throw new ImageValidationError('Could not determine valid image dimensions.', 'INVALID_DIMENSIONS');
   }
-
   if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
     throw new ImageValidationError(
       `Image dimensions (${width}x${height}) exceed maximum allowed dimension limit of ${MAX_DIMENSION}px.`,
@@ -77,233 +84,151 @@ export async function validateImageBuffer(buffer: Buffer): Promise<{
       'PIXELS_EXCEEDED'
     );
   }
-
-  // Reject source images that are too small to yield a crisp 480x480 square crop
-  if (width < MIN_SOURCE_DIMENSION || height < MIN_SOURCE_DIMENSION) {
+  if (Math.min(width, height) < MIN_SOURCE_DIMENSION) {
     throw new ImageTooSmallError(
-      `Image dimensions (${width}x${height}) are below minimum requirement of ${MIN_SOURCE_DIMENSION}x${MIN_SOURCE_DIMENSION}px. Upscaling would cause severe visual quality degradation.`,
+      `Image dimensions (${width}x${height}) are too small. Both source edges must be at least ${MIN_SOURCE_DIMENSION}px.`,
       { width, height, minRequired: MIN_SOURCE_DIMENSION }
     );
   }
 
-  return {
-    width,
-    height,
-    format,
-    hasAlpha: Boolean(metadata.hasAlpha),
-    orientation: metadata.orientation,
-  };
+  const orientedMaxEdge = Math.max(width, height);
+  if (orientedMaxEdge < MIN_PRIMARY_EDGE) {
+    throw new ImageTooSmallError(
+      `Image dimensions (${width}x${height}) cannot provide a ${MIN_PRIMARY_EDGE}px primary image without upscaling. Use a higher-resolution source.`,
+      { width, height, minRequired: MIN_PRIMARY_EDGE }
+    );
+  }
+
+  return { width, height, format, hasAlpha: Boolean(metadata.hasAlpha), orientation: metadata.orientation };
+}
+
+interface EncodedVariant {
+  buffer: Buffer;
+  width: number;
+  height: number;
+}
+
+/** Encode a variant directly from the original, preserving its full frame. */
+async function encodeVariant(
+  inputBuffer: Buffer,
+  maxEdge: number,
+  quality: number,
+  effort: number
+): Promise<EncodedVariant> {
+  const { data, info } = await sharp(inputBuffer, { failOn: 'error' })
+    .rotate()
+    .resize(maxEdge, maxEdge, {
+      fit: 'inside',
+      withoutEnlargement: true,
+      kernel: sharp.kernel.lanczos3,
+    })
+    .toColorspace('srgb')
+    .webp({ quality, effort, smartSubsample: true })
+    .toBuffer({ resolveWithObject: true });
+
+  if (!info.width || !info.height || info.width > maxEdge || info.height > maxEdge) {
+    throw new ImageProcessingError(`The ${maxEdge}px variant has invalid output dimensions.`);
+  }
+  return { buffer: data, width: info.width, height: info.height };
 }
 
 /**
- * Calculate square crop bounds based on focal point coordinates (0.0 - 1.0).
+ * Process an image into quality-first WebP variants. Each numeric size is the
+ * maximum edge length. The full source frame and aspect ratio are preserved;
+ * variants are encoded independently from the original and never upscaled.
  */
-export function calculateSquareCrop(
-  srcWidth: number,
-  srcHeight: number,
-  focalPoint: FocalPoint = { x: 0.5, y: 0.5 }
-): { left: number; top: number; size: number } {
-  const fx = Math.max(0, Math.min(1, focalPoint.x));
-  const fy = Math.max(0, Math.min(1, focalPoint.y));
-
-  const size = Math.min(srcWidth, srcHeight);
-
-  let left = Math.round(fx * srcWidth - size / 2);
-  let top = Math.round(fy * srcHeight - size / 2);
-
-  // Clamp within image bounds
-  left = Math.max(0, Math.min(srcWidth - size, left));
-  top = Math.max(0, Math.min(srcHeight - size, top));
-
-  return { left, top, size };
-}
-
-/**
- * Process a food image to 480x480 WebP with sRGB color space, EXIF orientation correction,
- * focal-point square cropping, stripped metadata, and target size 15-40 KB optimization.
- */
+export function processFoodImage(
+  inputBuffer: Buffer,
+  options: ImageProcessingOptions & { generateHierarchy: false }
+): Promise<ProcessedImageOnDemandResult>;
+export function processFoodImage(inputBuffer: Buffer, options?: ImageProcessingOptions): Promise<ProcessedImageResult>;
 export async function processFoodImage(
   inputBuffer: Buffer,
   options: ImageProcessingOptions = {}
-): Promise<ProcessedImageResult> {
+): Promise<ProcessedImageResult | ProcessedImageOnDemandResult> {
   const validated = await validateImageBuffer(inputBuffer);
-
-  const focalPoint: FocalPoint = options.focalPoint || { x: 0.5, y: 0.5 };
-  const targetWidth = options.width || 480;
-  const targetHeight = options.height || 480;
-  const initialQuality = options.initialQuality || 78;
-  const effort = options.effort || 5;
-  const minTargetBytes = options.targetSizeMinBytes ?? 15 * 1024; // 15 KB
-  const maxTargetBytes = options.targetSizeMaxBytes ?? 40 * 1024; // 40 KB
-
-  // Step 1: Normalize orientation
-  // If orientation is 5, 6, 7, 8, the image was rotated 90 or 270 degrees, swapping width and height
-  let currentWidth = validated.width;
-  let currentHeight = validated.height;
-  if (validated.orientation && validated.orientation >= 5 && validated.orientation <= 8) {
-    currentWidth = validated.height;
-    currentHeight = validated.width;
+  const focalPoint: FocalPoint = { x: 0.5, y: 0.5 }; // Kept for old metadata clients; no crop is applied.
+  const targetWidth = options.width ?? 480;
+  const targetHeight = options.height ?? 480;
+  const primaryMaxEdge = Math.max(targetWidth, targetHeight);
+  if (!Number.isInteger(primaryMaxEdge) || primaryMaxEdge < MIN_PRIMARY_EDGE) {
+    throw new ImageProcessingError(`Primary maximum edge must be an integer of at least ${MIN_PRIMARY_EDGE}px.`);
   }
 
-  // Step 2: Compute focal point square crop
-  const crop = calculateSquareCrop(currentWidth, currentHeight, focalPoint);
+  const quality = options.initialQuality ?? DEFAULT_WEBP_QUALITY;
+  const effort = options.effort ?? 6;
+  if (!Number.isInteger(quality) || quality < 1 || quality > 100) {
+    throw new ImageProcessingError('WebP quality must be an integer from 1 to 100.');
+  }
 
-  // Step 3: Base intermediate pipeline: oriented -> square cropped -> sRGB -> resized to 480x480
-  // Note: We create a reusable buffer or pipeline that represents the cropped raw image
-  // so we can re-encode at different quality levels without re-compressing previously compressed WebP!
-  let baseProcessedBuffer: Buffer;
+  const orientedWidth = validated.orientation && validated.orientation >= 5 && validated.orientation <= 8
+    ? validated.height
+    : validated.width;
+  const orientedHeight = validated.orientation && validated.orientation >= 5 && validated.orientation <= 8
+    ? validated.width
+    : validated.height;
+  const sourceMaxEdge = Math.max(orientedWidth, orientedHeight);
+
+  let primary: EncodedVariant;
+  let thumbnail: EncodedVariant | undefined;
   try {
-    baseProcessedBuffer = await sharp(inputBuffer)
-      .rotate()
-      .extract({
-        left: crop.left,
-        top: crop.top,
-        width: crop.size,
-        height: crop.size,
-      })
-      .resize(targetWidth, targetHeight, {
-        fit: 'fill',
-        kernel: sharp.kernel.lanczos3,
-      })
-      .toColorspace('srgb')
-      .png() // Lossless intermediate representation
-      .toBuffer();
-  } catch (err) {
-    throw new ImageProcessingError(
-      `Failed to crop and resize image: ${err instanceof Error ? err.message : String(err)}`
-    );
-  }
-
-  // Step 4: Iterative Quality WebP encoding
-  // Quality optimization ladder (descending if file > 40KB)
-  // Preserving visual fidelity: we never degrade below quality 50.
-  const qualityCandidates = [initialQuality, 72, 65, 58, 52];
-  let finalBuffer: Buffer | null = null;
-  let finalQuality = initialQuality;
-  let sizeWarning: string | undefined;
-
-  for (const q of qualityCandidates) {
-    try {
-      // Re-encode from the clean, uncompressed intermediate base
-      const testBuffer = await sharp(baseProcessedBuffer)
-        .webp({
-          quality: q,
-          effort,
-          smartSubsample: true,
-        })
-        .toBuffer();
-
-      finalBuffer = testBuffer;
-      finalQuality = q;
-
-      // If within target upper limit (40KB), we accept this quality
-      if (testBuffer.length <= maxTargetBytes) {
-        break;
-      }
-    } catch (err) {
-      throw new ImageProcessingError(
-        `WebP encoding failed at quality ${q}: ${err instanceof Error ? err.message : String(err)}`
-      );
+    // Always encode from the source to avoid generational loss. The web app
+    // stores one original and asks the delivery endpoint to make other sizes.
+    primary = await encodeVariant(inputBuffer, primaryMaxEdge, quality, effort);
+    if (options.generateHierarchy !== false) {
+      thumbnail = await encodeVariant(inputBuffer, 128, THUMBNAIL_WEBP_QUALITY, effort);
     }
-  }
-
-  if (!finalBuffer) {
-    throw new ImageProcessingError('Image processing produced an empty output buffer.');
-  }
-
-  // Check if final size is still above 40KB (visual quality preserved) or below 15KB
-  if (finalBuffer.length > maxTargetBytes) {
-    sizeWarning = `Output size (${(finalBuffer.length / 1024).toFixed(1)} KB) exceeds 40 KB target. Visual quality preserved at quality ${finalQuality}.`;
-  } else if (finalBuffer.length < minTargetBytes) {
-    // Note: acceptable if visual quality is crisp (e.g. minimalist food photos or clean graphics)
-    sizeWarning = `Output size (${(finalBuffer.length / 1024).toFixed(1)} KB) is below 15 KB target, visual quality verified.`;
-  }
-
-  // Step 5: Compute SHA-256 hash for primary 480x480
-  const sha256Hash = crypto.createHash('sha256').update(finalBuffer).digest('hex');
-  const perceptualHash = await computePerceptualHash(baseProcessedBuffer);
-
-  // Step 6: Generate ultra-compact 128x128 thumbnail without losing visual crispness
-  const thumbnailWidth = 128;
-  const thumbnailHeight = 128;
-  let thumbnailBuffer: Buffer;
-  try {
-    thumbnailBuffer = await sharp(baseProcessedBuffer)
-      .resize(thumbnailWidth, thumbnailHeight, {
-        fit: 'fill',
-        kernel: sharp.kernel.lanczos3,
-      })
-      .webp({
-        quality: 82,
-        effort: 6,
-        smartSubsample: true,
-      })
-      .toBuffer();
   } catch (err) {
     throw new ImageProcessingError(
-      `Thumbnail 128x128 generation failed: ${err instanceof Error ? err.message : String(err)}`
+      `Failed to create full-frame WebP images: ${err instanceof Error ? err.message : String(err)}`
     );
   }
 
-  const thumbnailHash = crypto.createHash('sha256').update(thumbnailBuffer).digest('hex');
-
-  // Step 7: Generate 960x960 Retina / 2x variant
-  let retinaBuffer: Buffer | undefined;
-  let retinaByteSize: number | undefined;
+  let retina: EncodedVariant | undefined;
+  let hiRes: EncodedVariant | undefined;
   try {
-    retinaBuffer = await sharp(inputBuffer)
-      .rotate()
-      .extract({ left: crop.left, top: crop.top, width: crop.size, height: crop.size })
-      .resize(960, 960, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
-      .toColorspace('srgb')
-      .webp({ quality: 80, effort: 5, smartSubsample: true })
-      .toBuffer();
-    retinaByteSize = retinaBuffer.length;
-  } catch {
-    // If extraction/resize fails, retina remains undefined
+    if (options.generateHierarchy !== false && sourceMaxEdge >= 960) retina = await encodeVariant(inputBuffer, 960, quality, effort);
+    if (options.generateHierarchy !== false && sourceMaxEdge >= 1600) hiRes = await encodeVariant(inputBuffer, 1600, quality, effort);
+  } catch (err) {
+    throw new ImageProcessingError(
+      `Failed to create a high-resolution WebP variant: ${err instanceof Error ? err.message : String(err)}`
+    );
   }
 
-  // Step 8: Generate 1600x1600 Full High-Res display variant
-  let hiResBuffer: Buffer | undefined;
-  let hiResByteSize: number | undefined;
-  const hiResTarget = Math.max(960, Math.min(crop.size, 1600));
+  const hash = crypto.createHash('sha256').update(primary.buffer).digest('hex');
+  let perceptualHash: string;
   try {
-    hiResBuffer = await sharp(inputBuffer)
-      .rotate()
-      .extract({ left: crop.left, top: crop.top, width: crop.size, height: crop.size })
-      .resize(hiResTarget, hiResTarget, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
-      .toColorspace('srgb')
-      .webp({ quality: 82, effort: 5, smartSubsample: true })
-      .toBuffer();
-    hiResByteSize = hiResBuffer.length;
-  } catch {
-    // Fallback if source resolution bounds prevent 1600px
+    perceptualHash = await computePerceptualHash(inputBuffer);
+  } catch (err) {
+    throw new ImageProcessingError(
+      `Failed to calculate image similarity hash: ${err instanceof Error ? err.message : String(err)}`
+    );
   }
 
   return {
-    buffer: finalBuffer,
-    hash: sha256Hash,
+    buffer: primary.buffer,
+    hash,
     perceptualHash,
-    width: targetWidth,
-    height: targetHeight,
+    width: primary.width,
+    height: primary.height,
     format: 'webp',
-    byteSize: finalBuffer.length,
+    sourceFormat: validated.format,
+    byteSize: primary.buffer.length,
     focalPoint,
-    qualityUsed: finalQuality,
-    sizeDeviationWarning: sizeWarning,
-    sourceDimensions: { width: validated.width, height: validated.height },
-    thumbnailBuffer,
-    thumbnailWidth,
-    thumbnailHeight,
-    thumbnailByteSize: thumbnailBuffer.length,
-    thumbnailHash,
-    retinaBuffer,
-    retinaWidth: 960,
-    retinaHeight: 960,
-    retinaByteSize,
-    hiResBuffer,
-    hiResWidth: hiResTarget,
-    hiResHeight: hiResTarget,
-    hiResByteSize,
+    qualityUsed: quality,
+    sourceDimensions: { width: orientedWidth, height: orientedHeight },
+    thumbnailBuffer: thumbnail?.buffer,
+    thumbnailWidth: thumbnail?.width,
+    thumbnailHeight: thumbnail?.height,
+    thumbnailByteSize: thumbnail?.buffer.length,
+    thumbnailHash: thumbnail ? crypto.createHash('sha256').update(thumbnail.buffer).digest('hex') : undefined,
+    retinaBuffer: retina?.buffer,
+    retinaWidth: retina?.width,
+    retinaHeight: retina?.height,
+    retinaByteSize: retina?.buffer.length,
+    hiResBuffer: hiRes?.buffer,
+    hiResWidth: hiRes?.width,
+    hiResHeight: hiRes?.height,
+    hiResByteSize: hiRes?.buffer.length,
   };
 }

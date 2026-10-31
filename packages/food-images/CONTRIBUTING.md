@@ -16,6 +16,13 @@
 
 CI rejects invalid metadata, unsupported license identifiers, duplicate slugs, exact duplicate image files, near-duplicates within 6 bits of the 64-bit DCT perceptual hash, and files that cannot be safely normalized. The perceptual hash is a fast duplicate check; it cannot verify the image's license or prove AI generation. Do not include generated WebP files or edit `dist/`.
 
+## Image quality and framing
+
+- Submit a source with a shortest edge of at least 300 px and a longest edge of at least 480 px. Larger source files produce 960 px and 1600 px variants when available.
+- The original source stays in the contribution folder. Generated WebP variants are encoded from that original at quality 92; the pipeline does not re-encode a smaller WebP into larger variants.
+- Images keep their full frame and aspect ratio. The pipeline does not crop or enlarge photos. A `480.webp` filename means a maximum edge of 480 px; the actual width and height are recorded in the catalog.
+- Output size is allowed to vary with image detail. The pipeline does not lower quality to meet an arbitrary kilobyte target.
+
 The repository maintains an explicit npm install-script allowlist in the root `package.json`: only the lockfile-pinned `esbuild` install script is approved because the TypeScript build tool requires its platform binary. Other discovered dependency scripts remain denied.
 
 After merge, Release Please prepares a versioned release pull request. Merging that release PR publishes the package through npm trusted publishing. The npm package must first be claimed and the repository/workflow configured as a trusted publisher by an npm package owner; see the repository's release setup notes.

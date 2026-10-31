@@ -424,7 +424,7 @@ export function InventoryExcelTable({
                             <img
                               src={row.asset.thumbnailUrl || row.asset.publicUrl}
                               alt={row.name}
-                              className="w-9 h-9 rounded object-cover border border-slate-700 group-hover:border-sky-400 transition-colors shadow-xs"
+                              className="w-9 h-9 rounded object-contain border border-slate-700 group-hover:border-sky-400 transition-colors shadow-xs"
                             />
                             <div className="absolute inset-0 bg-black/30 rounded opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
                               <Eye className="w-3.5 h-3.5" />

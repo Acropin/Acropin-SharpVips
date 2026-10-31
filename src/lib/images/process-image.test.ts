@@ -6,26 +6,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
-import { processFoodImage, validateImageBuffer, calculateSquareCrop } from './process-image';
+import { processFoodImage, validateImageBuffer } from './process-image';
 import { ImageValidationError, ImageTooSmallError } from './errors';
 
-test('calculateSquareCrop accurately computes focal bounds', () => {
-  // Center focal point on 1000x600 image
-  const centerCrop = calculateSquareCrop(1000, 600, { x: 0.5, y: 0.5 });
-  assert.equal(centerCrop.size, 600);
-  assert.equal(centerCrop.left, 200); // (0.5 * 1000) - 300 = 200
-  assert.equal(centerCrop.top, 0);
-
-  // Left-aligned focal point
-  const leftCrop = calculateSquareCrop(1000, 600, { x: 0.1, y: 0.5 });
-  assert.equal(leftCrop.left, 0); // clamped to 0
-
-  // Right-aligned focal point
-  const rightCrop = calculateSquareCrop(1000, 600, { x: 0.9, y: 0.5 });
-  assert.equal(rightCrop.left, 400); // clamped to 1000 - 600 = 400
-});
-
-test('processFoodImage creates exact 480x480 WebP with hash and metadata', async () => {
+test('processFoodImage preserves the full source frame in a high-quality WebP', async () => {
   // Generate real synthetic image with distinct patterns to test real libvips processing
   const testInput = await sharp({
     create: {
@@ -49,35 +33,35 @@ test('processFoodImage creates exact 480x480 WebP with hash and metadata', async
 
   const result = await processFoodImage(testInput, {
     focalPoint: { x: 0.5, y: 0.5 },
-    initialQuality: 78,
+    initialQuality: 92,
   });
 
   assert.equal(result.width, 480);
-  assert.equal(result.height, 480);
+  assert.equal(result.height, 360);
   assert.equal(result.format, 'webp');
   assert.ok(result.byteSize > 0);
-  assert.ok(result.byteSize <= 45 * 1024); // verify reasonable file size
+  assert.equal(result.qualityUsed, 92);
   assert.equal(typeof result.hash, 'string');
   assert.equal(result.hash.length, 64); // SHA-256 hex string
 
   // Verify the output buffer with sharp metadata
   const meta = await sharp(result.buffer).metadata();
   assert.equal(meta.width, 480);
-  assert.equal(meta.height, 480);
+  assert.equal(meta.height, 360);
   assert.equal(meta.format, 'webp');
 
   // Verify the 128x128 thumbnail buffer
   assert.equal(result.thumbnailWidth, 128);
-  assert.equal(result.thumbnailHeight, 128);
+  assert.equal(result.thumbnailHeight, 96);
   assert.ok(result.thumbnailByteSize > 0);
   assert.ok(result.thumbnailByteSize < result.byteSize);
   const thumbMeta = await sharp(result.thumbnailBuffer).metadata();
   assert.equal(thumbMeta.width, 128);
-  assert.equal(thumbMeta.height, 128);
+  assert.equal(thumbMeta.height, 96);
   assert.equal(thumbMeta.format, 'webp');
 });
 
-test('validateImageBuffer rejects undersized images that cannot produce quality 480x480', async () => {
+test('validateImageBuffer rejects undersized images that cannot produce a quality primary without upscaling', async () => {
   const smallInput = await sharp({
     create: {
       width: 200,
@@ -127,6 +111,6 @@ test('processFoodImage EXIF orientation correction', async () => {
 
   const result = await processFoodImage(orientedInput);
   assert.equal(result.width, 480);
-  assert.equal(result.height, 480);
+  assert.equal(result.height, 360);
   assert.equal(result.format, 'webp');
 });

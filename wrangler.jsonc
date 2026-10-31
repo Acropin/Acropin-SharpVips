@@ -5,6 +5,12 @@
   "account_id": "277e9a5ff18c63bed6e324cf7aa313e5",
   "compatibility_date": "2026-10-23",
   "compatibility_flags": ["nodejs_compat"],
+  "images": {
+    "binding": "IMAGES"
+  },
+  "cache": {
+    "enabled": true
+  },
   "d1_databases": [
     {
       "binding": "DB",
