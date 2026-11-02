@@ -1,6 +1,8 @@
 /** Cross-instance dish reservations backed by unique Vercel Blob pathnames. */
 import { BlobPreconditionFailedError, del, get, list, put } from '@vercel/blob';
 import { isBlobStorageConfigured } from '../storage/persistent-json.js';
+import { createHash } from 'node:crypto';
+import { firestoreDb, isFirestoreConfigured } from '../storage/firestore.js';
 
 const heldLocally = new Set<string>();
 const heldDailySlots = new Set<string>();
@@ -34,6 +36,7 @@ export class DishContributionLockUnavailableError extends Error {
 export interface ContributorDailySlot {
   key: string;
   path?: string;
+  firestorePath?: string;
   reservationId: string;
 }
 
@@ -113,6 +116,22 @@ export async function acquireDishContributionLock(
   hasBlockingCatalogAsset: () => Promise<boolean>
 ): Promise<void> {
   const pathname = lockPath(slug);
+  if (isFirestoreConfigured()) {
+    const ref = firestoreDb().collection('dishContributionLocks').doc(slug);
+    await firestoreDb().runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(ref);
+      const current = snapshot.exists ? snapshot.data() as LockRecord : undefined;
+      if (current?.reservationId === reservationId) return;
+      if (current?.committed) throw new DishContributionLockedError();
+      if (current && !isExpiredReservation(current)) throw new DishContributionLockedError();
+      transaction.set(ref, { reservationId, createdAt: new Date().toISOString(), committed: false });
+    }).catch((error) => {
+      if (error instanceof DishContributionLockedError) throw error;
+      throw new DishContributionLockUnavailableError();
+    });
+    localDishReservations.set(slug, reservationId);
+    return;
+  }
   if (!isBlobStorageConfigured()) {
     if (heldLocally.has(slug)) throw new DishContributionLockedError();
     heldLocally.add(slug);
@@ -163,6 +182,17 @@ export async function acquireDishContributionLock(
 
 /** Keep the reservation after persistence; release it for denied/failed work. */
 export async function commitDishContributionLock(slug: string, reservationId: string): Promise<void> {
+  if (isFirestoreConfigured()) {
+    const ref = firestoreDb().collection('dishContributionLocks').doc(slug);
+    await firestoreDb().runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(ref);
+      if (!snapshot.exists || snapshot.get('reservationId') !== reservationId) {
+        throw new Error('The upload reservation expired before it could be committed.');
+      }
+      transaction.update(ref, { committed: true, committedAt: new Date().toISOString() });
+    });
+    return;
+  }
   if (isBlobStorageConfigured()) await commitLock(lockPath(slug), reservationId);
 }
 
@@ -170,6 +200,15 @@ export async function releaseDishContributionLock(slug: string, reservationId?: 
   heldLocally.delete(slug);
   if (reservationId && localDishReservations.get(slug) !== reservationId) return;
   localDishReservations.delete(slug);
+  if (isFirestoreConfigured()) {
+    const ref = firestoreDb().collection('dishContributionLocks').doc(slug);
+    await firestoreDb().runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(ref);
+      if (!snapshot.exists) return;
+      if (!reservationId || snapshot.get('reservationId') === reservationId) transaction.delete(ref);
+    });
+    return;
+  }
   await releaseLock(lockPath(slug), reservationId);
 }
 
@@ -177,10 +216,32 @@ export async function releaseDishContributionLock(slug: string, reservationId?: 
 export async function acquireContributorDailySlot(
   contributorId: string,
   reservationId: string,
-  limit = 3
+  limit = 250
 ): Promise<ContributorDailySlot> {
   const day = currentUtcDay();
   const keyPrefix = `${contributorId}:${day}:`;
+  if (isFirestoreConfigured()) {
+    const docId = createHash('sha256').update(`${contributorId}:${day}`).digest('hex');
+    const ref = firestoreDb().collection('contributorDailyLimits').doc(docId);
+    const key = `${keyPrefix}${reservationId}`;
+    await firestoreDb().runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(ref);
+      const data = snapshot.exists ? snapshot.data() as { committed?: number; reservations?: Record<string, number> } : {};
+      const now = Date.now();
+      const reservations = Object.fromEntries(Object.entries(data.reservations ?? {}).filter(([, expiresAt]) => expiresAt > now));
+      if (reservations[reservationId]) return;
+      const committed = Number.isInteger(data.committed) ? data.committed as number : 0;
+      if (committed + Object.keys(reservations).length >= limit) throw new ContributorDailyLimitError(limit);
+      transaction.set(ref, {
+        contributorId,
+        day,
+        committed,
+        reservations: { ...reservations, [reservationId]: now + IN_PROGRESS_TTL_MS },
+        expireAt: new Date(new Date(`${day}T00:00:00.000Z`).getTime() + 90 * 24 * 60 * 60 * 1000),
+      });
+    });
+    return { key, firestorePath: docId, reservationId };
+  }
   if (!isBlobStorageConfigured()) {
     for (let slot = 1; slot <= limit; slot += 1) {
       const key = `${keyPrefix}${slot}`;
@@ -235,9 +296,34 @@ export async function acquireContributorDailySlot(
 /** Commit a slot by leaving its daily marker; release it when work fails. */
 export async function releaseContributorDailySlot(slot: ContributorDailySlot): Promise<void> {
   heldDailySlots.delete(slot.key);
+  if (slot.firestorePath) {
+    const ref = firestoreDb().collection('contributorDailyLimits').doc(slot.firestorePath);
+    await firestoreDb().runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(ref);
+      if (!snapshot.exists) return;
+      const data = snapshot.data() as { reservations?: Record<string, number> };
+      const reservations = { ...(data.reservations ?? {}) };
+      delete reservations[slot.reservationId];
+      transaction.update(ref, { reservations });
+    });
+    return;
+  }
   if (slot.path) await releaseLock(slot.path, slot.reservationId);
 }
 
 export async function commitContributorDailySlot(slot: ContributorDailySlot): Promise<void> {
+  if (slot.firestorePath) {
+    const ref = firestoreDb().collection('contributorDailyLimits').doc(slot.firestorePath);
+    await firestoreDb().runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(ref);
+      if (!snapshot.exists) throw new Error('Contributor daily reservation expired before it could be committed.');
+      const data = snapshot.data() as { committed?: number; reservations?: Record<string, number> };
+      const reservations = { ...(data.reservations ?? {}) };
+      if (!reservations[slot.reservationId] || reservations[slot.reservationId] <= Date.now()) return;
+      delete reservations[slot.reservationId];
+      transaction.update(ref, { committed: (data.committed ?? 0) + 1, reservations });
+    });
+    return;
+  }
   if (slot.path) await commitLock(slot.path, slot.reservationId);
 }

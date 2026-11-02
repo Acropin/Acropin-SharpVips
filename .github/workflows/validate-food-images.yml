@@ -15,7 +15,8 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
+      - run: npm install --global npm@12
+      - run: npm install --allow-remote=root
       - run: npm run build:food-images
       - run: npm test
       - run: npm run lint

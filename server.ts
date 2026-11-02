@@ -6,7 +6,7 @@
 import express from 'express';
 import multer from 'multer';
 import path from 'node:path';
-import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import sharp from 'sharp';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
@@ -70,7 +70,24 @@ import { inspectFoodImageWithMl } from './src/lib/server/ml-anti-corruption.js';
 import { fetchRemoteImage } from './src/lib/server/remote-image.js';
 import { canReadImageAsset } from './src/lib/server/image-authorization.js';
 import { buildMonthlyContributorLeaderboard } from './src/lib/server/contributor-rewards.js';
-import { isBlobStorageConfigured } from './src/lib/storage/persistent-json.js';
+import { isPersistentJsonStorageConfigured } from './src/lib/storage/persistent-json.js';
+import {
+  claimFirestoreImageUploadIntent,
+  completeFirestoreImageUploadIntent,
+  createFirestoreImageUploadIntent,
+  isFirestoreConfigured,
+  releaseFirestoreImageUploadIntent,
+} from './src/lib/storage/firestore.js';
+import {
+  deleteImageKitFile,
+  getImageKitClient,
+  getImageKitFileDetails,
+  isImageKitConfigured,
+} from './src/lib/storage/imagekit-storage.js';
+import {
+  isAuthenticatedContributorRoute,
+  isLegacyContributorRoute,
+} from './src/lib/server/legacy-contributor-access.js';
 import {
   initializeTargetDataset,
   getAllTargetItems,
@@ -166,7 +183,7 @@ function getGitHubOAuthConfig() {
     callbackUrl,
     sessionSecret,
     configured: Boolean(clientId && clientSecret && validCallback && sessionSecret.length >= 32 &&
-      (process.env.VERCEL !== '1' || isBlobStorageConfigured())),
+      (process.env.VERCEL !== '1' || isPersistentJsonStorageConfigured())),
   };
 }
 
@@ -270,17 +287,12 @@ function publicContributor(profile: ContributorProfile) {
 }
 
 function isAllowedContributorRequest(req: express.Request): boolean {
-  if (req.method === 'GET' && ['/dataset/targets', '/menu-tasks', '/canonical-dishes'].includes(req.path)) return true;
-  if (req.method === 'GET' && req.path === '/images/catalog' && req.query.status === 'approved') return true;
-  return req.method === 'POST' && [
-    '/images/upload',
-    '/images/process-url',
-  ].includes(req.path);
+  return isAuthenticatedContributorRoute(req.method, req.path, req.query.status);
 }
 
 function contributorDailyLimit(): number {
-  const configured = Number.parseInt(process.env.GITHUB_CONTRIBUTOR_DAILY_LIMIT || '3', 10);
-  return Number.isInteger(configured) && configured >= 1 && configured <= 20 ? configured : 3;
+  const configured = Number.parseInt(process.env.GITHUB_CONTRIBUTOR_DAILY_LIMIT || '250', 10);
+  return Number.isInteger(configured) && configured >= 201 && configured <= 500 ? configured : 250;
 }
 
 function isVisionVerified(inspection: PersistProcessedAssetInput['mlInspection']): boolean {
@@ -319,6 +331,28 @@ function sourceContentType(format: string): string {
 
 function onDemandImageUrl(assetId: string, maxEdge: number): string {
   return `/api/images/food-assets/${encodeURIComponent(assetId)}/v3/deliver?width=${maxEdge}&format=webp`;
+}
+
+function presentImageAsset(asset: ImageAsset): ImageAsset {
+  const storage = getStorageProvider();
+  if (!asset.storageProviderId || !storage.getDeliveryUrl) return asset;
+  const expiresIn = asset.approvalStatus === 'approved' ? 24 * 60 * 60 : 5 * 60;
+  const url = (edge: number) => storage.getDeliveryUrl!(asset.storageKey, {
+    width: edge,
+    height: edge,
+    format: 'auto',
+  }, expiresIn);
+  return {
+    ...asset,
+    publicUrl: url(480),
+    thumbnailUrl: url(128),
+    retinaUrl: asset.sourceWidth && Math.max(asset.sourceWidth, asset.sourceHeight ?? 0) >= 960
+      ? url(960)
+      : asset.retinaUrl,
+    hiResUrl: asset.sourceWidth && Math.max(asset.sourceWidth, asset.sourceHeight ?? 0) >= 1600
+      ? url(1600)
+      : asset.hiResUrl,
+  };
 }
 
 function dimensionsWithinMaxEdge(sourceWidth: number, sourceHeight: number, maxEdge: number): { width: number; height: number } {
@@ -380,7 +414,7 @@ async function persistProcessedAsset(input: PersistProcessedAssetInput): Promise
       ? [{ size: 1600 as const, ...dimensionsWithinMaxEdge(input.processed.sourceDimensions.width, input.processed.sourceDimensions.height, 1600) }]
       : []),
   ];
-  const uploaded: Array<{ key: string }> = [];
+  const uploaded: Array<{ key: string; providerId?: string }> = [];
 
   try {
     const extension = sourceFileExtension(input.processed.sourceFormat);
@@ -398,6 +432,7 @@ async function persistProcessedAsset(input: PersistProcessedAssetInput): Promise
       id: assetId,
       canonicalDishId: input.canonicalDishId,
       storageKey: source.key,
+      storageProviderId: source.providerId,
       publicUrl: dynamicUrl(480),
       thumbnailUrl: dynamicUrl(128),
       thumbnailWidth: thumbnailDimensions.width,
@@ -455,7 +490,7 @@ async function persistProcessedAsset(input: PersistProcessedAssetInput): Promise
     await registerAsset(asset);
     return asset;
   } catch (error) {
-    await Promise.allSettled(uploaded.map(({ key }) => storage.delete(key)));
+    await Promise.allSettled(uploaded.map(({ key, providerId }) => storage.delete(key, providerId)));
     throw error;
   }
 }
@@ -536,10 +571,48 @@ app.use(express.urlencoded({ extended: true, limit: vercelRequestLimit }));
 
 // The Vercel dashboard API is owner-only; restaurant apps use the
 // approved-key Cloudflare image API for catalog access.
+const storeInitializers = [
+  ['food image catalog', initializeCatalog],
+  ['restaurant menus', initializeRestaurants],
+  ['dataset targets', initializeTargetDataset],
+  ['contributors', initializeContributors],
+] as const;
+let storeInitializationPromise: Promise<void> | null = null;
+
+function ensureStoresInitialized(): Promise<void> {
+  if (!storeInitializationPromise) {
+    storeInitializationPromise = Promise.allSettled(
+      storeInitializers.map(([, initialize]) => initialize())
+    ).then((results) => {
+      const failures = results.flatMap((result, index) => {
+        if (result.status === 'fulfilled') return [];
+        console.error(`Could not initialize ${storeInitializers[index][0]}:`, result.reason);
+        return [storeInitializers[index][0]];
+      });
+      if (failures.length) {
+        throw new Error(`Shared storage is unavailable for: ${failures.join(', ')}.`);
+      }
+    }).catch((error) => {
+      storeInitializationPromise = null;
+      throw error;
+    });
+  }
+  return storeInitializationPromise;
+}
+
 app.use('/api', async (req, res, next) => {
   try {
   if (req.path === '/auth/status' || req.path.startsWith('/auth/github')) {
     next();
+    return;
+  }
+
+  // Keep the app shell and auth-status endpoints available during a provider
+  // outage, but fail storage-backed APIs closed until all stores initialize.
+  try {
+    await ensureStoresInitialized();
+  } catch {
+    res.status(503).json({ error: 'Shared library storage is temporarily unavailable. Please try again shortly.' });
     return;
   }
 
@@ -606,8 +679,16 @@ app.use('/api', async (req, res, next) => {
     res.status(403).json({ error: 'Contributor access for this GitHub account is disabled. Contact the library owner.' });
     return;
   }
+  if (
+    !profile &&
+    process.env.LEGACY_PUBLIC_CONTRIBUTIONS !== 'false' &&
+    isLegacyContributorRoute(req.method, req.path)
+  ) {
+    next();
+    return;
+  }
   if (!expected && process.env.VERCEL === '1') {
-    res.status(503).json({ error: 'Admin access is not configured. Complete GitHub sign-in to use contributor access.' });
+    res.status(503).json({ error: 'Owner controls are not configured. Public contribution routes remain available.' });
     return;
   }
   res.status(401).json({ error: 'Sign in with GitHub or enter the administrator access code.' });
@@ -618,11 +699,16 @@ app.use('/api', async (req, res, next) => {
 
 app.get('/api/auth/status', async (req, res, next) => {
   try {
+  // Report runtime health, not merely the presence of a Blob token. A configured
+  // store can still be suspended or reject reads, which must pause submissions.
+  const storageReady = await ensureStoresInitialized().then(() => true, () => false);
   const expected = process.env.ADMIN_API_TOKEN;
   const required = Boolean(expected) || process.env.VERCEL === '1';
   const supplied = req.get('authorization')?.replace(/^Bearer\s+/i, '') || '';
   const validToken = Boolean(expected) && safeEqual(supplied, expected || '');
-  const contributor = await getSessionContributor(req);
+  // Do not retry a failed legacy migration just to render auth status. Keep
+  // GitHub sign-in visible while storage is temporarily unavailable.
+  const contributor = storageReady ? await getSessionContributor(req) : undefined;
   const adminAuthenticated = validToken || isGitHubOwner(contributor) || !required;
   res.json({
     required,
@@ -630,6 +716,9 @@ app.get('/api/auth/status', async (req, res, next) => {
     authenticated: adminAuthenticated || contributor?.accessStatus === 'active',
     administrator: adminAuthenticated,
     githubConfigured: getGitHubOAuthConfig().configured,
+    legacyContributionsEnabled: process.env.LEGACY_PUBLIC_CONTRIBUTIONS !== 'false',
+    storageWritable: process.env.VERCEL !== '1' || (isPersistentJsonStorageConfigured() && storageReady),
+    directImageUploadsEnabled: isFirestoreConfigured() && isImageKitConfigured() && storageReady,
     dailyContributionLimit: contributorDailyLimit(),
     contributor: contributor ? publicContributor(contributor) : null,
   });
@@ -790,11 +879,6 @@ const upload = multer({
   },
 });
 
-// Initialize Stores
-await initializeCatalog();
-await initializeRestaurants();
-await initializeTargetDataset();
-await initializeContributors();
 
 // Approved assets are public; pending assets can be previewed by their owner or an admin.
 app.get('/api/images/food-assets/*', async (req, res) => {
@@ -834,13 +918,26 @@ app.get('/api/images/food-assets/*', async (req, res) => {
         return;
       }
       const accept = req.get('accept') ?? '';
-      const outputFormat = requestedFormat === 'auto'
+      const selectedFormat = requestedFormat as 'auto' | 'webp' | 'avif' | 'jpeg' | 'png';
+      const outputFormat: 'webp' | 'avif' | 'jpeg' | 'png' = selectedFormat === 'auto'
         ? accept.includes('image/avif') ? 'avif'
           : accept.includes('image/webp') ? 'webp'
             : 'jpeg'
-        : requestedFormat;
+        : selectedFormat;
 
       const storage = getStorageProvider();
+      if (asset.storageProviderId && storage.getDeliveryUrl) {
+        const destination = storage.getDeliveryUrl(asset.storageKey, {
+          width,
+          height,
+          format: outputFormat,
+        }, asset.approvalStatus === 'approved' ? 24 * 60 * 60 : 5 * 60);
+        res.setHeader('Cache-Control', asset.approvalStatus === 'approved'
+          ? 'private, max-age=0, no-store'
+          : 'private, no-store');
+        res.redirect(302, destination);
+        return;
+      }
       const source = await storage.get(asset.storageKey);
       if (!source) {
         res.status(404).json({ error: 'Stored source image is missing.' });
@@ -911,14 +1008,91 @@ app.get('/api/images/food-assets/*', async (req, res) => {
 // Image Processing & Catalog API
 // -------------------------------------------------------------
 
-// List assets with filtering
-app.get('/api/images/catalog', (req, res) => {
-  const status = req.query.status as AssetApprovalStatus | undefined;
-  const search = req.query.search as string | undefined;
-  const dishId = req.query.dishId as string | undefined;
+// Issue a short-lived, one-use ImageKit upload signature. The image bytes go
+// directly from the browser to ImageKit, avoiding Vercel's function payload cap.
+app.post('/api/images/upload/authorize', async (req, res) => {
+  try {
+    if (!isImageKitConfigured()) {
+      res.status(503).json({
+        code: 'IMAGEKIT_NOT_CONFIGURED',
+        error: 'Direct image uploads are not configured yet. The existing small-file upload remains available.',
+      });
+      return;
+    }
+    if (!isFirestoreConfigured()) {
+      res.status(503).json({
+        code: 'FIRESTORE_NOT_CONFIGURED',
+        error: 'Firestore must be configured to authorize and track direct image uploads safely.',
+      });
+      return;
+    }
 
-  const assets = getAllAssets({ status, search, dishId });
-  res.json({ assets, total: assets.length });
+    const extensions: Record<string, string> = {
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+      'image/avif': 'avif',
+      'image/tiff': 'tiff',
+      'image/heic': 'heic',
+      'image/heif': 'heif',
+    };
+    const contentType = typeof req.body?.contentType === 'string' ? req.body.contentType.toLowerCase() : '';
+    const extension = extensions[contentType];
+    if (!extension) {
+      res.status(400).json({ error: 'Choose a JPEG, PNG, WebP, AVIF, TIFF, or HEIC image.' });
+      return;
+    }
+
+    const uploadId = randomUUID();
+    const completionTicket = randomBytes(32).toString('base64url');
+    const folder = '/acropin-staging';
+    const fileName = `${uploadId}.${extension}`;
+    const expectedPath = `${folder}/${fileName}`;
+    const expiresInSeconds = 5 * 60;
+    const auth = getImageKitClient().helper.getAuthenticationParameters(
+      uploadId,
+      Math.floor(Date.now() / 1000) + expiresInSeconds
+    );
+    await createFirestoreImageUploadIntent({
+      id: uploadId,
+      expectedPath,
+      completionHash: createHash('sha256').update(completionTicket).digest('hex'),
+      expiresAt: auth.expire * 1000,
+      status: 'issued',
+      createdAt: new Date().toISOString(),
+    });
+
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
+    res.json({
+      uploadId,
+      completionTicket,
+      folder,
+      fileName,
+      token: auth.token,
+      signature: auth.signature,
+      expire: auth.expire,
+      publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
+    });
+  } catch (error) {
+    console.error('Could not authorize ImageKit upload:', error);
+    res.status(503).json({ error: 'Could not prepare the secure image upload. Please retry.' });
+  }
+});
+
+// List assets with filtering
+app.get('/api/images/catalog', async (req, res) => {
+  try {
+    await refreshCatalogFromStorage();
+    const status = req.query.status as AssetApprovalStatus | undefined;
+    const search = req.query.search as string | undefined;
+    const dishId = req.query.dishId as string | undefined;
+
+    const assets = getAllAssets({ status, search, dishId }).map(presentImageAsset);
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
+    res.json({ assets, total: assets.length });
+  } catch (err: unknown) {
+    res.status(503).json({ error: err instanceof Error ? err.message : 'Could not refresh the shared image catalog.' });
+  }
 });
 
 // Delete an asset from collection
@@ -948,8 +1122,64 @@ app.post('/api/images/upload', upload.single('image'), async (req, res) => {
   let keepLock = false;
   let dailySlot: ContributorDailySlot | undefined;
   let keepDailySlot = false;
+  let directUploadId: string | undefined;
+  let directUploadFileId: string | undefined;
+  let keepDirectUpload = false;
+  let sourceBuffer: Buffer | undefined;
   try {
-    if (!req.file || !req.file.buffer) {
+    if (req.file?.buffer) {
+      sourceBuffer = req.file.buffer;
+    } else {
+      const direct = req.body?.imageKitUpload;
+      if (!direct || typeof direct !== 'object' || Array.isArray(direct)) {
+        res.status(400).json({ error: 'No image file uploaded.' });
+        return;
+      }
+      const upload = direct as Record<string, unknown>;
+      const uploadId = typeof upload.uploadId === 'string' ? upload.uploadId : '';
+      const completionTicket = typeof upload.completionTicket === 'string' ? upload.completionTicket : '';
+      const fileId = typeof upload.fileId === 'string' ? upload.fileId : '';
+      const clientPath = typeof upload.filePath === 'string' ? upload.filePath : '';
+      if (!/^[0-9a-f-]{36}$/iu.test(uploadId) || completionTicket.length < 32 ||
+          !fileId || fileId.length > 128 || !clientPath.startsWith('/acropin-staging/')) {
+        res.status(400).json({ error: 'The direct image upload could not be verified. Please upload it again.' });
+        return;
+      }
+      if (!isImageKitConfigured() || !isFirestoreConfigured()) {
+        res.status(503).json({ error: 'Direct image uploads are not configured. Ask the library owner to check ImageKit and Firestore settings.' });
+        return;
+      }
+
+      const details = await getImageKitFileDetails(fileId);
+      const validImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/tiff', 'image/heic', 'image/heif']);
+      if (details.fileId !== fileId || !details.filePath || details.filePath !== clientPath ||
+          details.isPrivateFile !== true || details.fileType !== 'image' ||
+          typeof details.size !== 'number' || details.size < 1 || details.size > 15 * 1024 * 1024 ||
+          typeof details.mime !== 'string' || !validImageTypes.has(details.mime.toLowerCase())) {
+        res.status(400).json({ error: 'The uploaded file did not pass image validation. Please upload a supported image again.' });
+        return;
+      }
+
+      const claimed = await claimFirestoreImageUploadIntent({
+        id: uploadId,
+        completionHash: createHash('sha256').update(completionTicket).digest('hex'),
+        actualPath: details.filePath,
+        imageKitFileId: fileId,
+      });
+      if (!claimed) {
+        res.status(409).json({ error: 'This image upload authorization is expired or already used. Please upload the image again.' });
+        return;
+      }
+      directUploadId = uploadId;
+      directUploadFileId = fileId;
+      const stored = await getStorageProvider().get(details.filePath.replace(/^\/+/, ''));
+      if (!stored || !stored.data.length || stored.data.length !== details.size) {
+        res.status(503).json({ error: 'The uploaded image could not be read. Please retry the upload.' });
+        return;
+      }
+      sourceBuffer = stored.data;
+    }
+    if (!sourceBuffer) {
       res.status(400).json({ error: 'No image file uploaded.' });
       return;
     }
@@ -989,7 +1219,7 @@ app.post('/api/images/upload', upload.single('image'), async (req, res) => {
     }
 
     // Create full-frame variants with a 480px maximum edge and high WebP quality.
-    const processed = await processFoodImage(req.file.buffer, {
+    const processed = await processFoodImage(sourceBuffer, {
       width: 480,
       height: 480,
       initialQuality: 95,
@@ -1048,12 +1278,12 @@ app.post('/api/images/upload', upload.single('image'), async (req, res) => {
       : undefined;
     const asset = await persistProcessedAsset({
       processed,
-      sourceBuffer: req.file.buffer,
+      sourceBuffer,
       dishName: universal.displayName,
       universalName: universal.universalName,
       filename: universal.filename,
       canonicalDishId: validCanonicalDishId,
-      originalByteSize: req.file.buffer.length,
+      originalByteSize: sourceBuffer.length,
       rights,
       mlInspection,
       approvalStatus,
@@ -1070,10 +1300,17 @@ app.post('/api/images/upload', upload.single('image'), async (req, res) => {
       recordContributorSubmission(access.profile.id);
       await flushContributors().catch((error) => console.error('Could not update contributor submission count:', error));
     }
+    if (directUploadId && directUploadFileId) {
+      await completeFirestoreImageUploadIntent(directUploadId, directUploadFileId)
+        .catch((error) => console.error('Could not complete the ImageKit upload intent:', error));
+      keepDirectUpload = true;
+      await deleteImageKitFile(directUploadFileId)
+        .catch((error) => console.error('Could not remove the temporary ImageKit upload:', error));
+    }
     const match = matchCanonicalDish(universal.displayName);
 
     res.status(201).json({
-      asset,
+      asset: presentImageAsset(asset),
       canonicalMatch: match,
       warning: processed.sizeDeviationWarning,
       sourceDimensions: processed.sourceDimensions,
@@ -1086,6 +1323,16 @@ app.post('/api/images/upload', upload.single('image'), async (req, res) => {
       : err instanceof StorageError || err instanceof PerceptualIndexUnavailableError || err instanceof DishContributionLockUnavailableError ? 503 : 400)
       .json({ error: message });
   } finally {
+    if (directUploadId && !keepDirectUpload) {
+      if (directUploadFileId) {
+        await deleteImageKitFile(directUploadFileId).catch((error) => {
+          console.error('Could not remove the rejected temporary ImageKit upload:', error);
+        });
+      }
+      await releaseFirestoreImageUploadIntent(directUploadId, directUploadFileId).catch((error) => {
+        console.error('Could not release the unfinished ImageKit upload intent:', error);
+      });
+    }
     if (dailySlot && !keepDailySlot) {
       await releaseContributorDailySlot(dailySlot).catch((error) => {
         console.error('Could not release an unfinished contributor quota slot:', error);
@@ -1309,6 +1556,7 @@ app.post('/api/ml/inspect', upload.single('image'), async (req, res) => {
 // Real-time Excel-like Inventory Dashboard: live missing vs completed dishes
 app.get('/api/menu-tasks', async (_req, res) => {
   try {
+    await refreshCatalogFromStorage();
     const status = await withFreshTargetDataset(() => {
       const approved = getAllAssets({ status: 'approved' });
       const pending = getAllAssets({ status: 'pending_review' });
@@ -1323,6 +1571,7 @@ app.get('/api/menu-tasks', async (_req, res) => {
 // Live Target Dataset & Excel Spreadsheet Endpoint
 app.get('/api/dataset/targets', async (_req, res) => {
   try {
+    await refreshCatalogFromStorage();
     const status = await withFreshTargetDataset(() => {
       const approved = getAllAssets({ status: 'approved' });
       const pending = getAllAssets({ status: 'pending_review' });
@@ -1349,6 +1598,7 @@ app.post('/api/dataset/targets/import', async (req, res) => {
         ? parseDatasetTargetImport(rawText)
         : [];
 
+    await refreshCatalogFromStorage();
     const { result, datasetStatus } = await withFreshTargetDataset(async () => {
       const result = bulkImportTargets(listToImport, replaceExisting === true);
       await flushTargets();
@@ -1416,6 +1666,7 @@ app.delete('/api/dataset/targets/:id', async (req, res) => {
 // Export Real-time Inventory as CSV
 app.get('/api/dataset/export-csv', async (_req, res) => {
   try {
+    await refreshCatalogFromStorage();
     const csv = await withFreshTargetDataset(() => {
       const approved = getAllAssets({ status: 'approved' });
       const pending = getAllAssets({ status: 'pending_review' });
@@ -1446,9 +1697,15 @@ app.get('/api/dataset/export-csv', async (_req, res) => {
 });
 
 // Organizer Review Queue List
-app.get('/api/images/review-queue', (_req, res) => {
-  const pending = getAllAssets({ status: 'pending_review' });
-  res.json({ pending, count: pending.length });
+app.get('/api/images/review-queue', async (_req, res) => {
+  try {
+    await refreshCatalogFromStorage();
+    const pending = getAllAssets({ status: 'pending_review' });
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
+    res.json({ pending, count: pending.length });
+  } catch (err: unknown) {
+    res.status(503).json({ error: err instanceof Error ? err.message : 'Could not refresh the review queue.' });
+  }
 });
 
 // Organizer Review Decision (Approve / Reject)
@@ -1456,6 +1713,7 @@ app.post('/api/images/review-queue/:id/decision', async (req, res) => {
   try {
     const { id } = req.params;
     const { decision, rejectionReason } = req.body;
+    await refreshCatalogFromStorage();
     if (decision !== 'approve' && decision !== 'reject') {
       res.status(400).json({ error: 'Decision must be "approve" or "reject".' });
       return;
@@ -1487,32 +1745,37 @@ app.post('/api/images/review-queue/:id/decision', async (req, res) => {
 
 // Update asset approval status (e.g. approved, rejected, revoked)
 app.patch('/api/images/catalog/:id/status', async (req, res) => {
-  const { id } = req.params;
-  const { status, reason } = req.body;
+  try {
+    const { id } = req.params;
+    const { status, reason } = req.body;
+    await refreshCatalogFromStorage();
 
-  if (!['approved', 'pending_review', 'rejected', 'revoked'].includes(status)) {
-    res.status(400).json({ error: 'Invalid approval status provided.' });
-    return;
+    if (!['approved', 'pending_review', 'rejected', 'revoked'].includes(status)) {
+      res.status(400).json({ error: 'Invalid approval status provided.' });
+      return;
+    }
+
+    const updated = updateAssetStatus(id, status as AssetApprovalStatus, reason);
+    if (!updated) {
+      res.status(404).json({ error: 'Asset not found.' });
+      return;
+    }
+
+    let revocationReport;
+    if (status === 'revoked') {
+      revocationReport = handleAssetRevocation(id);
+      await flushRestaurantStore();
+    }
+    await flushCatalog();
+    if (status === 'rejected') await releaseDishContributionLock(updated.universalName);
+
+    res.json({
+      asset: updated,
+      revocationReport,
+    });
+  } catch (err: unknown) {
+    res.status(503).json({ error: err instanceof Error ? err.message : 'Could not update the image status.' });
   }
-
-  const updated = updateAssetStatus(id, status as AssetApprovalStatus, reason);
-  if (!updated) {
-    res.status(404).json({ error: 'Asset not found.' });
-    return;
-  }
-
-  let revocationReport;
-  if (status === 'revoked') {
-    revocationReport = handleAssetRevocation(id);
-    await flushRestaurantStore();
-  }
-  await flushCatalog();
-  if (status === 'rejected') await releaseDishContributionLock(updated.universalName);
-
-  res.json({
-    asset: updated,
-    revocationReport,
-  });
 });
 
 // -------------------------------------------------------------

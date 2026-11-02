@@ -6,13 +6,21 @@
 import { foodImages } from 'acropin-food-images';
 import { getAppDataFile } from '../storage/data-directory.js';
 import { getStorageProvider } from '../storage/image-storage.js';
-import { readPersistentJson, writePersistentJson } from '../storage/persistent-json.js';
+import { isBlobStorageConfigured, readPersistentJson, writePersistentJson } from '../storage/persistent-json.js';
+import {
+  isFirestoreConfigured,
+  isFirestoreImageCatalogMigrated,
+  markFirestoreImageCatalogMigrated,
+  readFirestoreImageAssets,
+  writeFirestoreImageAssetChanges,
+} from '../storage/firestore.js';
 import {
   computePerceptualHash,
   MAX_PERCEPTUAL_DUPLICATE_DISTANCE,
   perceptualHashDistance,
 } from '../images/perceptual-hash.js';
 import { fetchRemoteImage } from './remote-image.js';
+import { mergeLegacyAndFirestoreImageAssets } from './catalog-merge.js';
 import type { AssetApprovalStatus, ImageAsset } from '../images/types.js';
 
 const catalogDataFile = () => getAppDataFile('catalog.json');
@@ -32,6 +40,37 @@ let assetCatalog: ImageAsset[] = [];
 let isInitialized = false;
 let initializePromise: Promise<void> | null = null;
 let pendingSave: Promise<void> = Promise.resolve();
+let persistedFirestoreAssets = new Map<string, ImageAsset>();
+
+async function readStoredAssets(): Promise<ImageAsset[]> {
+  const firestoreAssets = await readFirestoreImageAssets();
+  if (firestoreAssets === null) {
+    const legacy = await readPersistentJson<unknown>('app-data/catalog.json', catalogDataFile());
+    if (legacy !== null && (!Array.isArray(legacy) || !legacy.every(isImageAsset))) {
+      throw new Error('Image catalog storage is invalid. Fix the stored data before accepting uploads.');
+    }
+    return (legacy ?? []) as ImageAsset[];
+  }
+
+  const migrated = await isFirestoreImageCatalogMigrated();
+  if (!migrated) {
+    const legacy = await readPersistentJson<unknown>('app-data/catalog.json', catalogDataFile());
+    if (legacy !== null && (!Array.isArray(legacy) || !legacy.every(isImageAsset))) {
+      throw new Error('Legacy image catalog storage is invalid. Fix it before migrating to Firestore.');
+    }
+    const legacyAssets = (legacy ?? []) as ImageAsset[];
+    const currentById = new Map(firestoreAssets.map((asset) => [asset.id, asset]));
+    const missingLegacyAssets = legacyAssets.filter((asset) => !currentById.has(asset.id));
+    if (missingLegacyAssets.length) await writeFirestoreImageAssetChanges(missingLegacyAssets, []);
+    await markFirestoreImageCatalogMigrated();
+    const assets = mergeLegacyAndFirestoreImageAssets(legacyAssets, firestoreAssets);
+    persistedFirestoreAssets = new Map(assets.filter((asset) => !asset.tags?.includes('npm-package')).map((asset) => [asset.id, asset]));
+    return assets;
+  }
+
+  persistedFirestoreAssets = new Map(firestoreAssets.map((asset) => [asset.id, asset]));
+  return firestoreAssets;
+}
 
 export class DuplicateAssetError extends Error {
   constructor(message: string) {
@@ -85,9 +124,20 @@ function getPackageAssets(): ImageAsset[] {
 
 function saveCatalogToFile() {
   const snapshot = assetCatalog.filter((asset) => !asset.tags?.includes('npm-package'));
-  pendingSave = pendingSave.catch(() => undefined).then(() =>
-    writePersistentJson('app-data/catalog.json', catalogDataFile(), snapshot)
-  );
+  if (isFirestoreConfigured()) {
+    const current = new Map(snapshot.map((asset) => [asset.id, asset]));
+    const changed = snapshot.filter((asset) => JSON.stringify(persistedFirestoreAssets.get(asset.id)) !== JSON.stringify(asset));
+    const removed = [...persistedFirestoreAssets.keys()].filter((id) => !current.has(id));
+    pendingSave = pendingSave.catch(() => undefined).then(async () => {
+      await writeFirestoreImageAssetChanges(changed, removed);
+      persistedFirestoreAssets = current;
+      await markFirestoreImageCatalogMigrated();
+    });
+  } else {
+    pendingSave = pendingSave.catch(() => undefined).then(() =>
+      writePersistentJson('app-data/catalog.json', catalogDataFile(), snapshot)
+    );
+  }
 }
 
 function isLegacyPlaceholderAsset(asset: ImageAsset): boolean {
@@ -210,14 +260,9 @@ export async function initializeCatalog(): Promise<void> {
   if (!initializePromise) {
     initializePromise = (async () => {
       try {
-        const parsed = await readPersistentJson<unknown>('app-data/catalog.json', catalogDataFile());
-        if (parsed !== null && (!Array.isArray(parsed) || !parsed.every(isImageAsset))) {
-          throw new Error('Image catalog storage is invalid. Fix the stored data before accepting uploads.');
-        }
-
+        const savedAssets = await readStoredAssets();
         const packageAssets = getPackageAssets();
         const packageSlugs = new Set(packageAssets.map((asset) => asset.universalName));
-        const savedAssets = (parsed ?? []) as ImageAsset[];
         const acceptedAssets = savedAssets.filter((asset) => !isLegacyPlaceholderAsset(asset));
         const storedAssets = acceptedAssets.map(removeUnverifiedLegacyAttribution);
         // A reviewed npm contribution takes precedence over an older app-managed
@@ -230,7 +275,7 @@ export async function initializeCatalog(): Promise<void> {
         const attributionChanged = acceptedAssets.some(hasUnverifiedLegacyAttribution);
         const placeholdersRemoved = storedAssets.length !== savedAssets.length;
         if ((placeholdersRemoved || attributionChanged) &&
-            (process.env.BLOB_READ_WRITE_TOKEN || process.env.VERCEL !== '1')) {
+            (isFirestoreConfigured() || isBlobStorageConfigured() || process.env.VERCEL !== '1')) {
           saveCatalogToFile();
           await flushCatalog();
         }
@@ -247,14 +292,11 @@ export async function initializeCatalog(): Promise<void> {
 /** Reload durable catalog state before contribution decisions made by warm instances. */
 export async function refreshCatalogFromStorage(): Promise<void> {
   await initializeCatalog();
-  const parsed = await readPersistentJson<unknown>('app-data/catalog.json', catalogDataFile());
-  if (parsed !== null && (!Array.isArray(parsed) || !parsed.every(isImageAsset))) {
-    throw new Error('Image catalog storage is invalid. Fix the stored data before accepting uploads.');
-  }
+  await pendingSave;
+  const savedAssets = await readStoredAssets();
 
   const packageAssets = getPackageAssets();
   const packageSlugs = new Set(packageAssets.map((asset) => asset.universalName));
-  const savedAssets = (parsed ?? []) as ImageAsset[];
   const storedAssets = savedAssets
     .filter((asset) => !isLegacyPlaceholderAsset(asset))
     .map(removeUnverifiedLegacyAttribution);
@@ -416,16 +458,16 @@ export async function deleteAsset(id: string): Promise<boolean> {
   saveCatalogToFile();
   await flushCatalog();
 
-  const storageKeys = [
-    removed?.storageKey,
-    removed?.thumbnailStorageKey,
-    removed?.retinaStorageKey,
-    removed?.hiResStorageKey,
-  ].filter((key): key is string => Boolean(key));
+  const storageFiles = [
+    removed?.storageKey ? { key: removed.storageKey, providerId: removed.storageProviderId } : undefined,
+    removed?.thumbnailStorageKey ? { key: removed.thumbnailStorageKey } : undefined,
+    removed?.retinaStorageKey ? { key: removed.retinaStorageKey } : undefined,
+    removed?.hiResStorageKey ? { key: removed.hiResStorageKey } : undefined,
+  ].filter((file): file is { key: string; providerId?: string } => Boolean(file));
   const storage = getStorageProvider();
-  const deletionResults = await Promise.allSettled(storageKeys.map((key) => storage.delete(key)));
+  const deletionResults = await Promise.allSettled(storageFiles.map(({ key, providerId }) => storage.delete(key, providerId)));
   const failedDeletes = deletionResults
-    .map((result, index) => ({ result, key: storageKeys[index] }))
+    .map((result, index) => ({ result, key: storageFiles[index].key }))
     .filter((entry) => entry.result.status === 'rejected');
   if (failedDeletes.length > 0) {
     console.error('Some image variants could not be removed from storage:', failedDeletes.map(({ key }) => key));

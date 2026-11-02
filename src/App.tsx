@@ -41,6 +41,7 @@ import {
 import type { ImageAsset, MlInspectionResult } from './lib/images/types';
 import type { InventoryTableRow } from './lib/server/dataset-target-store';
 import { apiFetch, setAdminToken } from './lib/client/api';
+import { uploadImageDirectToImageKit } from './lib/client/imagekit-upload';
 import { InventoryExcelTable } from './components/InventoryExcelTable';
 import { ReviewQueueView } from './components/ReviewQueueView';
 import { MetadataInspectorModal } from './components/MetadataInspectorModal';
@@ -65,8 +66,8 @@ interface DatasetResponse {
 }
 
 type ContributionLicense = '' | 'CC0' | 'CC-BY-4.0';
-const MAX_UPLOAD_BYTES = 3.5 * 1024 * 1024;
-type AccessState = 'checking' | 'required' | 'unconfigured' | 'authenticated' | 'blocked' | 'unavailable';
+const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+type AccessState = 'checking' | 'required' | 'unconfigured' | 'authenticated' | 'public' | 'blocked' | 'unavailable';
 
 function readContributorGitHub(): string {
   try {
@@ -103,6 +104,8 @@ interface AuthStatusResponse {
   authenticated: boolean;
   administrator?: boolean;
   githubConfigured?: boolean;
+  legacyContributionsEnabled?: boolean;
+  storageWritable?: boolean;
   dailyContributionLimit?: number;
   contributor?: GitHubContributor | null;
 }
@@ -115,7 +118,9 @@ export default function App() {
   const [adminAccessConfigured, setAdminAccessConfigured] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [githubConfigured, setGithubConfigured] = useState(false);
-  const [contributorDailyLimit, setContributorDailyLimit] = useState(3);
+  const [legacyContributionsEnabled, setLegacyContributionsEnabled] = useState(false);
+  const [storageWritable, setStorageWritable] = useState(true);
+  const [contributorDailyLimit, setContributorDailyLimit] = useState(250);
   const [currentContributor, setCurrentContributor] = useState<GitHubContributor | null>(null);
   const [showSignInModal, setShowSignInModal] = useState(false);
   const [signInModalMessage, setSignInModalMessage] = useState<string | null>(null);
@@ -172,7 +177,9 @@ export default function App() {
     setAdminAccessRequired(status.required);
     setAdminAccessConfigured(status.configured);
     setGithubConfigured(Boolean(status.githubConfigured));
-    setContributorDailyLimit(status.dailyContributionLimit || 3);
+    setLegacyContributionsEnabled(Boolean(status.legacyContributionsEnabled));
+    setStorageWritable(status.storageWritable !== false);
+    setContributorDailyLimit(status.dailyContributionLimit || 250);
     setCurrentContributor(status.contributor || null);
     if (status.administrator) {
       setIsAdmin(true);
@@ -183,6 +190,10 @@ export default function App() {
     } else if (status.contributor?.accessStatus === 'blocked') {
       setIsAdmin(false);
       setAccessState('blocked');
+    } else if (status.legacyContributionsEnabled) {
+      setIsAdmin(false);
+      setAdminToken(null);
+      setAccessState('public');
     } else if (status.required && !status.configured && !status.githubConfigured) {
       setIsAdmin(false);
       setAccessState('unconfigured');
@@ -270,7 +281,7 @@ export default function App() {
 
   // Keep already-open contributor inventories in sync with owner imports.
   useEffect(() => {
-    if (accessState !== 'authenticated' || activeTab !== 'inventory') return;
+    if ((accessState !== 'authenticated' && accessState !== 'public') || activeTab !== 'inventory') return;
 
     const refreshWhenVisible = () => {
       if (document.visibilityState === 'visible') void fetchDataset();
@@ -318,7 +329,7 @@ export default function App() {
   useEffect(() => {
     if (accessState === 'checking' || accessState === 'unavailable') return;
     fetchCatalog();
-    if (accessState === 'authenticated') {
+    if (accessState === 'authenticated' || accessState === 'public') {
       fetchDataset();
       if (isAdmin) fetchReviewQueue();
       else setPendingAssets([]);
@@ -338,7 +349,7 @@ export default function App() {
 
   const selectImageFile = (selected: File) => {
     if (selected.size > MAX_UPLOAD_BYTES) {
-      setErrorMessage('Choose an image smaller than 3.5 MB. The hosted Vercel upload endpoint has a 4.5 MB request limit.');
+      setErrorMessage('Choose an image smaller than 15 MB. Larger images upload directly to ImageKit when enabled; the legacy fallback is limited to 3.5 MB.');
       return;
     }
     if (!selected.type.startsWith('image/')) {
@@ -349,10 +360,6 @@ export default function App() {
     setFile(selected);
     setFilePreview(URL.createObjectURL(selected));
     setInputMode('upload');
-    if (accessState === 'required' || accessState === 'unconfigured') {
-      setSignInModalMessage('Sign in before submitting. Your selected image will stay on this page.');
-      setShowSignInModal(true);
-    }
   };
 
   // Drag and drop handling
@@ -373,7 +380,7 @@ export default function App() {
   // Process & Submit Image
   const handleProcessAndSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (accessState !== 'authenticated') {
+    if (accessState !== 'authenticated' && accessState !== 'public') {
       if (accessState === 'required' || accessState === 'unconfigured') {
         setSignInModalMessage('Sign in before submitting. Your selected image and form details will stay on this page.');
         setShowSignInModal(true);
@@ -412,20 +419,27 @@ export default function App() {
     try {
       let res: Response;
       if (inputMode === 'upload' && file) {
-        const formData = new FormData();
-        formData.append('image', file);
-        formData.append('dishName', dishTitle);
-        formData.append('universalName', universalSlug);
-        formData.append('contributorGitHub', contributorGitHub);
-        formData.append('submitDirect', String(submitDirect));
-        formData.append('licenseType', licenseType);
-        formData.append('requiredAttribution', requiredAttribution);
-        formData.append('rightsAttested', String(rightsAttested));
-
-        res = await apiFetch('/api/images/upload', {
-          method: 'POST',
-          body: formData,
-        });
+        const fields = {
+          dishName: dishTitle,
+          universalName: universalSlug,
+          contributorGitHub,
+          submitDirect: String(submitDirect),
+          licenseType,
+          requiredAttribution,
+          rightsAttested: String(rightsAttested),
+        };
+        const directResponse = await uploadImageDirectToImageKit(file, fields);
+        if (directResponse) {
+          res = directResponse;
+        } else {
+          if (file.size > 4 * 1024 * 1024) {
+            throw new Error('This image is too large for the current upload setup. Ask the library owner to enable ImageKit direct uploads, or choose an image under 4 MB.');
+          }
+          const formData = new FormData();
+          formData.append('image', file);
+          Object.entries(fields).forEach(([key, value]) => formData.append(key, String(value ?? '')));
+          res = await apiFetch('/api/images/upload', { method: 'POST', body: formData });
+        }
       } else {
         res = await apiFetch('/api/images/process-url', {
           method: 'POST',
@@ -449,10 +463,13 @@ export default function App() {
       }
 
       setLastResult(data);
-      // Refresh inventory and queue
-      fetchDataset();
-      if (isAdmin) fetchReviewQueue();
-      fetchCatalog();
+      // Re-read durable storage after acceptance so warm server instances
+      // cannot leave the inventory showing a stale “Needs Image” row.
+      await Promise.all([
+        fetchDataset(),
+        fetchCatalog(),
+        isAdmin ? fetchReviewQueue() : Promise.resolve(),
+      ]);
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : String(err));
     } finally {
@@ -553,7 +570,7 @@ export default function App() {
     setAdminToken(null);
     setIsAdmin(false);
     setCurrentContributor(null);
-    setAccessState('required');
+    setAccessState(legacyContributionsEnabled ? 'public' : 'required');
     setDatasetData(null);
     setPendingAssets([]);
     setCatalog([]);
@@ -566,7 +583,7 @@ export default function App() {
     setIsAdmin(false);
     setDatasetData(null);
     setCatalog([]);
-    setAccessState('required');
+    await refreshAuthStatus().catch(() => setAccessState('unavailable'));
   };
 
   const beginGitHubSignIn = () => {
@@ -632,7 +649,7 @@ export default function App() {
               aria-label="Inventory"
               title="Inventory"
               onClick={() => {
-                if (accessState === 'authenticated') setActiveTab('inventory');
+                if (accessState === 'authenticated' || accessState === 'public') setActiveTab('inventory');
                 else {
                   setSignInModalMessage('Sign in to open contributor inventory and editing tools.');
                   setShowSignInModal(true);
@@ -737,12 +754,12 @@ export default function App() {
               Sign out @{currentContributor.login}
             </button>
           )}
-          {(accessState === 'required' || accessState === 'unconfigured') && (
+          {(accessState === 'required' || accessState === 'unconfigured' || accessState === 'public') && (
             <button
               onClick={() => { setSignInModalMessage(null); setShowSignInModal(true); }}
               className="self-end sm:self-auto sm:ml-2 min-h-10 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500"
             >
-              Sign in to contribute
+              {accessState === 'public' ? 'Owner sign-in' : 'Sign in'}
             </button>
           )}
         </div>
@@ -754,6 +771,11 @@ export default function App() {
           <div role="status" className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-emerald-800 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200">
             <span>{authNotice}</span>
             <button aria-label="Dismiss message" onClick={() => setAuthNotice(null)} className="shrink-0 text-emerald-200/80 hover:text-white"><X className="h-4 w-4" /></button>
+          </div>
+        )}
+        {!storageWritable && (
+          <div role="alert" className="mb-4 rounded-lg border border-amber-800 bg-amber-950/40 px-4 py-3 text-sm text-amber-200">
+            Shared library storage is temporarily unavailable. New contributions are paused until the owner restores storage access; existing contributions are being preserved.
           </div>
         )}
         {accessState === 'blocked' && (
@@ -868,7 +890,7 @@ export default function App() {
                             </label>
                           </p>
                           <p className="text-xs text-slate-500 mt-1">
-                            Supports browser image formats up to 3.5 MB per file. Choose a license and confirm redistribution rights below.
+                            Supports browser image formats up to 15 MB. Direct uploads use ImageKit when configured; choose a license and confirm redistribution rights below.
                           </p>
                         </div>
                       </div>
@@ -997,7 +1019,7 @@ export default function App() {
                   </label>
 
                   {!isAdmin && <p className="border-t border-slate-800/80 pt-3 text-[11px] leading-relaxed text-amber-200/80">
-                    Each dish name can have one active submission. A pending or published dish is locked against repeat uploads; an administrator can reopen it if a submission is rejected. Limit: {contributorDailyLimit} unique dishes per UTC day.
+                    Each dish can have one active submission. Pending submissions go to the owner review queue. {currentContributor ? 'Limit: ' + contributorDailyLimit + ' unique dishes per UTC day.' : 'No GitHub sign-in is required.'}
                   </p>}
 
                   {/* Submission target choice */}
@@ -1035,7 +1057,7 @@ export default function App() {
                         setShowSignInModal(true);
                       }
                     }}
-                    disabled={isProcessing}
+                    disabled={isProcessing || !storageWritable}
                     className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-sky-950/50 flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
                   >
                     {isProcessing ? (
@@ -1069,6 +1091,12 @@ export default function App() {
                     </span>
                   </span>
                 </div>
+
+                {lastResult.asset.approvalStatus === 'pending_review' && (
+                  <p className="rounded-lg border border-sky-900/60 bg-sky-950/30 px-4 py-3 text-sm text-sky-200">
+                    Saved successfully and awaiting review. It will appear in the approved shared library after approval; track its preview and review status in Inventory.
+                  </p>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="flex flex-col items-center justify-center bg-slate-950 p-4 rounded-xl border border-slate-800">
@@ -1219,8 +1247,8 @@ export default function App() {
             <div className="mb-4 flex items-center gap-3 pr-8">
               <img src={chefHatLogo} alt="Acropin" className="h-10 w-10 object-contain" />
               <div>
-                <h2 id="contributor-sign-in-title" className="text-base font-semibold text-white">Sign in to contribute</h2>
-                <p className="text-xs text-slate-400">Your selected image stays on this page.</p>
+                <h2 id="contributor-sign-in-title" className="text-base font-semibold text-white">Owner dashboard sign-in</h2>
+                <p className="text-xs text-slate-400">Contributors can use the familiar review flow without GitHub sign-in. This code unlocks owner tools.</p>
               </div>
             </div>
             {signInModalMessage && <p role="alert" className="mb-3 rounded-lg border border-amber-800 bg-amber-950/40 p-3 text-xs leading-relaxed text-amber-200">{signInModalMessage}</p>}
@@ -1232,12 +1260,13 @@ export default function App() {
                   <button onClick={beginGitHubSignIn} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-white px-4 py-3 text-sm font-semibold text-slate-950 hover:bg-slate-100">
                     <Github className="h-4 w-4" /> Continue with GitHub
                   </button>
-                ) : (
+                ) : !legacyContributionsEnabled ? (
                   <div className="rounded-lg border border-amber-800 bg-amber-950/40 p-3 text-xs leading-relaxed text-amber-200">
                     GitHub sign-in is not configured yet. The owner needs to create a GitHub OAuth App and add its client ID, client secret, callback URL, and session secret to this environment.
                   </div>
-                )}
-                {githubConfigured && <p className="text-center text-xs text-slate-400">GitHub sign-in creates your profile and enables contributor tools immediately. Submitted images still need rights and content review before they are published.</p>}
+                ) : null}
+                {githubConfigured && <p className="text-center text-xs text-slate-400">GitHub sign-in is optional for contributors. Every new image still needs owner review before it is published.</p>}
+                {legacyContributionsEnabled && <p className="text-center text-xs text-slate-400">No GitHub OAuth setup is needed to submit an image. Public submissions always enter the owner review queue.</p>}
                 {adminAccessRequired && !adminAccessConfigured && <p className="rounded-lg border border-amber-900/70 bg-amber-950/30 p-3 text-xs text-amber-200">Owner controls are unavailable until <code>ADMIN_API_TOKEN</code> is configured.</p>}
                 {adminAccessConfigured && <>
                   <div className="border-t border-slate-800 pt-3 text-center text-[11px] uppercase tracking-wide text-slate-500">Owner sign-in</div>

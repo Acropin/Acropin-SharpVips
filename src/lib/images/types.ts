@@ -117,6 +117,8 @@ export interface ImageAsset {
   id: string; // unique asset ID
   canonicalDishId?: string;
   storageKey: string; // Legacy assets point to a stored variant; v3 assets point to their single private source.
+  /** Provider file ID, used for safe deletion and migration on managed storage. */
+  storageProviderId?: string;
   publicUrl: string; // Stable on-demand delivery URL (480px maximum edge for new assets).
   /** Source is stored once; transformed variants are delivered on request. */
   sourceFormat?: string;

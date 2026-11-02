@@ -8,12 +8,15 @@ import path from 'node:path';
 import { del, get, put } from '@vercel/blob';
 import { StorageError } from '../images/errors.js';
 import { getAppDataFile } from './data-directory.js';
+import { ImageKitStorageProvider, isImageKitConfigured } from './imagekit-storage.js';
+import { isBlobStorageConfigured } from './persistent-json.js';
 
 export interface StorageUploadResult {
   key: string;
   url: string;
   byteSize: number;
   contentType: string;
+  providerId?: string;
 }
 
 export interface IImageStorageProvider {
@@ -26,8 +29,13 @@ export interface IImageStorageProvider {
   ): Promise<StorageUploadResult>;
   get(key: string): Promise<{ data: Buffer; contentType: string } | null>;
   exists(key: string): Promise<boolean>;
-  delete(key: string): Promise<void>;
+  delete(key: string, providerId?: string): Promise<void>;
   getUrl(key: string): string;
+  getDeliveryUrl?(key: string, options: {
+    width: number;
+    height: number;
+    format: 'auto' | 'webp' | 'avif' | 'jpeg' | 'png';
+  }, expiresIn: number): string;
 }
 
 /**
@@ -236,7 +244,9 @@ let storageInstance: IImageStorageProvider | null = null;
 
 export function getStorageProvider(): IImageStorageProvider {
   if (!storageInstance) {
-    if (process.env.BLOB_READ_WRITE_TOKEN) {
+    if (isImageKitConfigured()) {
+      storageInstance = new ImageKitStorageWithLegacyReadFallback();
+    } else if (isBlobStorageConfigured()) {
       storageInstance = new VercelBlobStorageProvider();
     } else if (process.env.VERCEL === '1') {
       storageInstance = new DeploymentReadOnlyStorageProvider();
@@ -245,4 +255,32 @@ export function getStorageProvider(): IImageStorageProvider {
     }
   }
   return storageInstance;
+}
+
+/** New uploads go to ImageKit; legacy Vercel Blob images remain readable during migration. */
+class ImageKitStorageWithLegacyReadFallback extends ImageKitStorageProvider {
+  private legacyBlob = new VercelBlobStorageProvider();
+
+  public override async get(key: string): Promise<{ data: Buffer; contentType: string } | null> {
+    const current = await super.get(key);
+    if (current) return current;
+    if (!isBlobStorageConfigured()) return null;
+    return this.legacyBlob.get(key);
+  }
+
+  public override async exists(key: string): Promise<boolean> {
+    return Boolean(await this.get(key));
+  }
+
+  public override async delete(key: string, providerId?: string): Promise<void> {
+    if (providerId) {
+      await super.delete(key, providerId);
+      return;
+    }
+    if (isBlobStorageConfigured()) {
+      await this.legacyBlob.delete(key);
+      return;
+    }
+    await super.delete(key, providerId);
+  }
 }

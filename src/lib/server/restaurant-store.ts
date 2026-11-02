@@ -5,7 +5,8 @@
 
 import { getAssetById } from './catalog-store.js';
 import { getAppDataFile } from '../storage/data-directory.js';
-import { readPersistentJson, writePersistentJson } from '../storage/persistent-json.js';
+import { isBlobStorageConfigured, readPersistentJson, writePersistentJson } from '../storage/persistent-json.js';
+import { isFirestoreConfigured } from '../storage/firestore.js';
 import type {
   MenuItem,
   RestaurantMenu,
@@ -67,7 +68,7 @@ export async function initializeRestaurants(): Promise<void> {
         restaurants = savedRestaurants.filter((menu) => !isLegacyDemoRestaurant(menu));
 
         if (restaurants.length !== savedRestaurants.length &&
-            (process.env.BLOB_READ_WRITE_TOKEN || process.env.VERCEL !== '1')) {
+            (isFirestoreConfigured() || isBlobStorageConfigured() || process.env.VERCEL !== '1')) {
           saveRestaurantsToFile();
           await flushRestaurantStore();
         }

@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import type { AssetApprovalStatus, ImageAsset, LicenseType, RestaurantMenu } from '../lib/images/types';
 import { apiFetch } from '../lib/client/api';
+import { uploadImageDirectToImageKit } from '../lib/client/imagekit-upload';
 
 interface ImageLibraryProps {
   currentRestaurantId: string;
@@ -142,19 +143,25 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({
     setIsUploading(true);
     setUploadFeedback(null);
 
-    const formData = new FormData();
-    formData.append('image', uploadFile);
-    formData.append('dishName', dishNameInput);
-    formData.append('licenseType', licenseTypeInput);
-    formData.append('licenseEvidence', licenseEvidenceInput || 'Internal studio production');
-    formData.append('requiredAttribution', attributionInput);
-    formData.append('autoApprove', autoApproveInput ? 'true' : 'false');
+    const fields = {
+      dishName: dishNameInput,
+      licenseType: licenseTypeInput,
+      licenseEvidence: licenseEvidenceInput || 'Internal studio production',
+      requiredAttribution: attributionInput,
+      autoApprove: autoApproveInput ? 'true' : 'false',
+    };
 
     try {
-      const res = await apiFetch('/api/images/upload', {
-        method: 'POST',
-        body: formData,
-      });
+      let res = await uploadImageDirectToImageKit(uploadFile, fields);
+      if (!res) {
+        if (uploadFile.size > 4 * 1024 * 1024) {
+          throw new Error('This image is too large for the current upload setup. Ask the library owner to enable ImageKit direct uploads, or choose an image under 4 MB.');
+        }
+        const formData = new FormData();
+        formData.append('image', uploadFile);
+        Object.entries(fields).forEach(([key, value]) => formData.append(key, String(value ?? '')));
+        res = await apiFetch('/api/images/upload', { method: 'POST', body: formData });
+      }
 
       const data = await res.json();
 
